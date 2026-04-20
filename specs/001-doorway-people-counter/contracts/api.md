@@ -239,6 +239,53 @@ End an active session.
 
 ---
 
+### POST /api/sessions/{id}/pause
+
+Pause an active session — counting loop continues running but no new `CrossingEvent` rows are written and the WebSocket emits no events.
+
+**Response 204**: Session paused.
+**Response 404**: Session not found.
+**Response 409**: Session is not currently active (already paused or ended).
+
+---
+
+### POST /api/sessions/{id}/resume
+
+Resume a paused session — re-enables event writing and WebSocket emission.
+
+**Response 204**: Session resumed.
+**Response 404**: Session not found.
+**Response 409**: Session is not currently paused.
+
+---
+
+### GET /api/sessions
+
+List sessions for a profile.
+
+**Query params**:
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `profile_id` | string | Yes | UUID of the profile |
+
+**Response 200**:
+```json
+[
+  {
+    "id": "uuid",
+    "started_at": "2026-04-20T14:30:00Z",
+    "ended_at": "2026-04-20T15:00:00Z",
+    "total_in": 12,
+    "total_out": 10
+  }
+]
+```
+Sessions are returned newest-first. `ended_at` is `null` for an active session. `total_in` and `total_out` are computed from the `events` table.
+
+**Response 422**: Missing or invalid `profile_id`.
+
+---
+
 ### GET /api/sessions/{id}/events
 
 List all crossing events for a session.

@@ -40,7 +40,7 @@
 - [ ] T011 [P] Write unit tests in `tests/unit/test_model_service.py` — verify: singleton loads once, subsequent calls return same instance, mock load path works. **Run and confirm FAIL.**
 - [ ] T012 [P] Create `backend/services/model_service.py` — YOLOv8 singleton: load `ultralytics.YOLO(config.MODEL_VARIANT)` once at module level; expose `get_model()` returning the shared instance
 - [ ] T013 Run `tests/unit/test_model_service.py` and confirm all tests pass ✅
-- [ ] T014 Create `backend/main.py` — FastAPI app: mount `StaticFiles` for `frontend/` at `/`, include all routers (registered in later phases), configure `logging` with `RotatingFileHandler` to `logs/app.log` (INFO default, `LOG_LEVEL` env var override) (FR-022)
+- [ ] T014 Create `backend/main.py` — FastAPI app: `Path("logs").mkdir(exist_ok=True)` on startup, mount `StaticFiles` for `frontend/` at `/`, include all routers (registered in later phases), configure `logging` with `RotatingFileHandler` to `logs/app.log` (INFO default, `LOG_LEVEL` env var override) (FR-022)
 - [ ] T015 Create `frontend/css/styles.css` — base layout: CSS variables for colours, wizard step container, count bar grid, video aspect-ratio wrapper, quality badge styles, error banner styles
 
 **Checkpoint**: DB layer tested ✅ · model singleton tested ✅ · FastAPI app boots · logging configured · base CSS exists.
@@ -75,7 +75,7 @@
 - [ ] T030 [US1] Run `tests/unit/test_counting_service.py` and confirm all tests pass ✅
 - [ ] T031 [US1] Implement `backend/routers/stream.py` — `GET /stream?profile_id=`: start `CountingService` if not running, yield MJPEG frames as `multipart/x-mixed-replace`; return 503 if camera unavailable
 - [ ] T032 [P] [US1] Implement `backend/routers/counts.py` — `WS /ws/counts?profile_id=`: accept WebSocket, subscribe to `CountingService` event queue, forward `{"direction","occupancy","timestamp"}` JSON per crossing; handle disconnect cleanly (FR-023: multiple clients supported)
-- [ ] T033 [P] [US1] Implement `backend/routers/sessions.py` (start/end only) — `POST /api/sessions/start` creates session row, `POST /api/sessions/{id}/end` sets `ended_at`; wire `CountingService` to write `CrossingEvent` rows on each crossing
+- [ ] T033 [P] [US1] Implement `backend/routers/sessions.py` (start/end/events/pause/resume) — `POST /api/sessions/start` creates session row; `POST /api/sessions/{id}/end` sets `ended_at`; `POST /api/sessions/{id}/pause` and `POST /api/sessions/{id}/resume` gate event writes in `CountingService` (FR-019); `GET /api/sessions/{id}/events` returns all crossing events for a session; wire `CountingService` to write `CrossingEvent` rows on each crossing when not paused
 - [ ] T034 [P] [US1] Write `tests/integration/test_websocket_counts.py` — connect WebSocket, trigger mock crossing event from `CountingService`, assert JSON message received with correct shape. **Run, implement any fixes, confirm pass ✅**
 - [ ] T035 [US1] Create `frontend/index.html` — profile list home page: empty-state prompt ("No doors yet — Create one"), profile cards (name + created date), "Create New Door/Entryway Profile" button; calls `GET /api/profiles` on load
 - [ ] T036 [US1] Create `frontend/js/api.js` — fetch wrapper: `getProfiles()`, `createProfile(data)`, `getProfile(id)`, `deleteProfile(id)`, `startSession(profileId)`, `endSession(id)`, `startCalibration(frames, mode)`, `retryCalibration(frames, mode)`
@@ -186,10 +186,11 @@
 
 ### Implementation for US6
 
-- [ ] T064 [US6] Update `backend/routers/sessions.py` — add `GET /api/sessions/{id}/events` (list events) and `GET /api/sessions/{id}/export` (stream CSV with `Content-Disposition: attachment; filename="session-{id}.csv"`)
+- [ ] T064 [US6] Update `backend/routers/sessions.py` — add `GET /api/sessions/{id}/export` (stream CSV with `Content-Disposition: attachment; filename="session-{id}.csv"`) and `GET /api/sessions?profile_id=` (list sessions for a profile with computed `total_in`/`total_out` from events table, newest-first)
 - [ ] T065 [US6] Update `backend/routers/profiles.py` — add `GET /api/profiles/{id}/export` (download profile JSON as attachment) and `POST /api/profiles/import` (validate schema, assign new UUID, write to profiles dir) (FR-024)
 - [ ] T066 [US6] Update `frontend/js/count.js` — wire "Export CSV" button to `GET /api/sessions/{id}/export` using a temporary `<a>` download link
-- [ ] T067 [US6] Update `frontend/index.html` — add "Session History" section per profile: fetch sessions for selected profile, list each with start/end time, total IN, total OUT, download link (FR-018); add "Import Profile" button wired to file-input → `POST /api/profiles/import`
+- [ ] T067 [US6] Update `frontend/js/api.js` — add `getSessions(profileId)` calling `GET /api/sessions?profile_id=`, `exportSession(id)` calling `GET /api/sessions/{id}/export`, `pauseSession(id)` and `resumeSession(id)` for the new pause/resume endpoints
+- [ ] T067b [US6] Update `frontend/index.html` — add "Session History" section per profile: call `getSessions(profileId)`, list each session with start/end time, total IN, total OUT, download link (FR-018); add "Import Profile" button wired to file-input → `POST /api/profiles/import`
 - [ ] T068 [US6] Run `tests/integration/test_sessions_api.py` (export) and confirm pass ✅
 - [ ] T069 [US6] Run `tests/integration/test_profiles_api.py` (export/import) and confirm pass ✅
 
@@ -206,7 +207,7 @@
 - [ ] T072 [P] Add FPS display to MJPEG stream — `counting_service.get_fps()` rendered server-side on each frame via `cv2.putText`; also show `model_variant` label
 - [ ] T073 [P] Add camera-error handling in `backend/routers/stream.py` — if `cv2.VideoCapture` fails to open, return 503 JSON; browser shows actionable "Camera unavailable" overlay with retry button
 - [ ] T074 Add camera-deny UX in `frontend/js/calibrate.js` step 1 — catch `getUserMedia` `NotAllowedError`; show instructions panel with browser-specific steps to re-enable camera permission
-- [ ] T075 [P] Register `logs/` directory creation in `backend/main.py` startup event — `Path("logs").mkdir(exist_ok=True)` so first run never fails due to missing dir
+- [ ] T075 [P] Verify `logs/app.log` is created on first `python run.py` with no pre-existing `logs/` directory — confirms T014's `mkdir(exist_ok=True)` fires correctly before the `RotatingFileHandler` attaches
 - [ ] T076 [P] Add `README.md` with quickstart instructions mirroring `specs/001-doorway-people-counter/quickstart.md`
 - [ ] T077 Run full test suite `pytest --tb=short` — confirm all unit + integration tests pass, fix any regressions ✅
 - [ ] T078 Manual end-to-end walkthrough per `specs/001-doorway-people-counter/quickstart.md` — complete all 10 verification checklist items, document any deviations
