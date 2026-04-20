@@ -1,5 +1,6 @@
 import logging
 import logging.handlers
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -7,11 +8,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.config import LOGS_DIR, LOG_LEVEL, PROFILES_DIR
 
-app = FastAPI(title="Doorway People Counter")
 
-
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -27,6 +26,10 @@ async def startup():
     from backend.db.database import get_connection
     conn = get_connection()
     conn.close()
+    yield
+
+
+app = FastAPI(title="Doorway People Counter", lifespan=lifespan)
 
 
 # ── Routers (registered as they are implemented) ──────────────────────────

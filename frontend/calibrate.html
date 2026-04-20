@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calibration Wizard — Doorway Counter</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="container wizard">
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+    <a href="/" style="color:var(--clr-muted);text-decoration:none">← Back</a>
+    <h1 style="font-size:1.3rem">New Door Profile</h1>
+  </div>
+
+  <div class="step-progress" id="step-dots"></div>
+
+  <!-- Step 1: Camera permission -->
+  <div class="step active" id="step-1">
+    <div class="step-header"><h2>Allow Camera Access</h2><p>We need your camera to see the doorway</p></div>
+    <div id="permission-error" class="banner banner-error hidden">
+      Camera permission denied. Please enable it in your browser settings and refresh the page.
+    </div>
+    <button class="btn btn-primary" id="btn-allow-camera">Allow Camera Access</button>
+  </div>
+
+  <!-- Step 2: Live preview -->
+  <div class="step" id="step-2">
+    <div class="step-header"><h2>Frame Your Doorway</h2><p>Make sure the full door is visible in the frame</p></div>
+    <div class="video-wrapper">
+      <video id="preview" autoplay muted playsinline></video>
+      <canvas id="preview-overlay"></canvas>
+    </div>
+    <button class="btn btn-primary" id="btn-to-mode">Next: Choose Capture Mode →</button>
+  </div>
+
+  <!-- Step 3: Mode selection -->
+  <div class="step" id="step-3">
+    <div class="step-header"><h2>Choose Capture Mode</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <button class="btn btn-ghost" id="btn-photo-mode" style="padding:1.5rem;flex-direction:column;height:auto">
+        <span style="font-size:2rem">📷</span>
+        <strong>5-Photo Guided</strong>
+        <small style="color:var(--clr-muted)">More accurate</small>
+      </button>
+      <button class="btn btn-ghost" id="btn-video-mode" style="padding:1.5rem;flex-direction:column;height:auto">
+        <span style="font-size:2rem">📹</span>
+        <strong>5-Second Video</strong>
+        <small style="color:var(--clr-muted)">Quicker</small>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 4: Capture -->
+  <div class="step" id="step-4">
+    <div class="step-header"><h2 id="capture-heading">Capture</h2><p id="capture-instruction"></p></div>
+    <div class="video-wrapper">
+      <video id="capture-preview" autoplay muted playsinline></video>
+      <div id="countdown-overlay" class="countdown-overlay hidden"></div>
+    </div>
+    <div id="thumb-strip" class="thumb-strip" style="margin-top:.5rem"></div>
+    <button class="btn btn-primary" id="btn-capture" style="margin-top:.5rem">Capture Photo</button>
+  </div>
+
+  <!-- Step 5: Quality check -->
+  <div class="step" id="step-5">
+    <div class="step-header"><h2>Placement Quality Check</h2></div>
+    <div id="quality-badges"></div>
+    <div style="display:flex;gap:.75rem;margin-top:.5rem">
+      <button class="btn btn-ghost" id="btn-recapture">Re-capture</button>
+      <button class="btn btn-primary" id="btn-continue-anyway">Continue anyway →</button>
+    </div>
+  </div>
+
+  <!-- Step 6: Proposal -->
+  <div class="step" id="step-6">
+    <div class="step-header"><h2>Doorway Proposal</h2><p>Here's what we detected</p></div>
+    <div class="canvas-wrapper">
+      <canvas id="proposal-canvas"></canvas>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:.75rem">
+      <button class="btn btn-ghost" id="btn-reject-proposal">No, retry</button>
+      <button class="btn btn-primary" id="btn-accept-proposal">Yes, this looks right →</button>
+    </div>
+    <button class="btn btn-warning hidden" id="btn-draw-manual" style="margin-top:.5rem">Draw manually instead</button>
+  </div>
+
+  <!-- Step 7: Manual draw fallback -->
+  <div class="step" id="step-7">
+    <div class="step-header"><h2>Draw Doorway Boundary</h2><p>Click to place 4 corners, then adjust the counting line</p></div>
+    <div class="canvas-wrapper">
+      <canvas id="draw-canvas"></canvas>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:.75rem">
+      <button class="btn btn-ghost" id="btn-reset-draw">Reset</button>
+      <button class="btn btn-primary" id="btn-save-draw" disabled>Save This Boundary →</button>
+    </div>
+  </div>
+
+  <!-- Step 8: Door behaviour -->
+  <div class="step" id="step-8">
+    <div class="step-header">
+      <h2>Door Behaviour</h2>
+      <p>Does this door open and close randomly (e.g. automatic sliding door, wind-affected)?</p>
+    </div>
+    <div style="display:flex;gap:1rem">
+      <button class="btn btn-ghost" id="btn-door-no" style="flex:1;padding:1.5rem">No, it stays put</button>
+      <button class="btn btn-warning" id="btn-door-yes" style="flex:1;padding:1.5rem">Yes, it opens randomly</button>
+    </div>
+  </div>
+
+  <!-- Step 9: Save -->
+  <div class="step" id="step-9">
+    <div class="step-header"><h2>Name Your Profile</h2></div>
+    <input id="profile-name" type="text" placeholder="e.g. Main Entrance" maxlength="100"
+      style="width:100%;padding:.75rem;background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:var(--radius);color:var(--clr-text);font-size:1rem">
+    <div id="save-error" class="banner banner-error hidden"></div>
+    <button class="btn btn-success" id="btn-save">Save & Start Counting →</button>
+  </div>
+</div>
+
+<script type="module" src="/js/calibrate.js"></script>
+</body>
+</html>

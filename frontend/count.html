@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Counting — Doorway Counter</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="container" style="max-width:1100px">
+
+  <!-- Header bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <div class="live-dot" id="live-dot"></div>
+      <h1 id="profile-name" style="font-size:1.2rem">Loading…</h1>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <button class="btn btn-ghost" id="btn-pause">⏸ Pause</button>
+      <button class="btn btn-danger" id="btn-stop">■ Stop</button>
+    </div>
+  </div>
+
+  <!-- Door opens banner -->
+  <div id="door-banner" class="banner banner-warning hidden" style="margin-bottom:1rem">
+    ⚠️ This door opens randomly — accuracy may be reduced for up to 60 s after a door state change.
+  </div>
+
+  <!-- Stream + overlay -->
+  <div class="video-wrapper" style="margin-bottom:1rem">
+    <img id="stream" alt="Live stream" style="background:#000">
+    <div id="stream-error" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7)">
+      <div style="text-align:center">
+        <p style="color:var(--clr-error);margin-bottom:.75rem">Stream interrupted</p>
+        <button class="btn btn-ghost" id="btn-reload-stream">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Count bar -->
+  <div class="count-bar" style="margin-bottom:1rem">
+    <div class="count-cell in">
+      <span class="count-label">↑ IN</span>
+      <span class="count-value" id="count-in">0</span>
+    </div>
+    <div class="count-cell out">
+      <span class="count-label">↓ OUT</span>
+      <span class="count-value" id="count-out">0</span>
+    </div>
+    <div class="count-cell occ">
+      <span class="count-label">= OCCUPANCY</span>
+      <span class="count-value" id="count-occ">0</span>
+    </div>
+  </div>
+
+  <!-- Bottom panel -->
+  <div style="display:grid;grid-template-columns:1fr auto;gap:1rem">
+    <div class="card">
+      <h3 style="font-size:.9rem;color:var(--clr-muted);margin-bottom:.75rem">Recent Events</h3>
+      <div id="events-log" class="events-log"></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:.5rem;min-width:160px">
+      <a href="/calibrate.html" class="btn btn-ghost">⚙ Recalibrate</a>
+      <button class="btn btn-ghost" id="btn-export">📋 Export CSV</button>
+      <a href="/" class="btn btn-ghost">🚪 Switch Door</a>
+    </div>
+  </div>
+
+  <!-- Reconnecting banner -->
+  <div id="reconnect-banner" class="banner banner-info hidden" style="margin-top:1rem">
+    WebSocket disconnected — reconnecting…
+  </div>
+</div>
+
+<script type="module" src="/js/count.js"></script>
+</body>
+</html>

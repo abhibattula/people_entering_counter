@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doorway Counter</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="container">
+  <header style="margin-bottom:2rem">
+    <h1 style="font-size:1.6rem">Doorway People Counter</h1>
+    <p style="color:var(--clr-muted);margin-top:.25rem">Track who enters and exits your space</p>
+  </header>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+    <h2 style="font-size:1.1rem">Saved Profiles</h2>
+    <div style="display:flex;gap:.75rem">
+      <label class="btn btn-ghost" style="cursor:pointer">
+        Import Profile
+        <input type="file" id="import-input" accept=".json" style="display:none">
+      </label>
+      <a href="/calibrate.html" class="btn btn-primary">+ New Profile</a>
+    </div>
+  </div>
+
+  <div id="import-banner" class="banner banner-info hidden" style="margin-bottom:1rem"></div>
+
+  <div id="profiles-list">
+    <div class="card" style="text-align:center;padding:3rem">
+      <p style="color:var(--clr-muted);margin-bottom:1rem">No door profiles yet</p>
+      <a href="/calibrate.html" class="btn btn-primary">Create New Door/Entryway Profile</a>
+    </div>
+  </div>
+
+  <!-- Session history modal -->
+  <div id="history-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:min(700px,95vw);max-height:80vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 id="history-title">Session History</h3>
+        <button class="btn btn-ghost" id="close-history">✕</button>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { getProfiles, deleteProfile, importProfile, getSessions, exportSession } from "/js/api.js";
+
+const list = document.getElementById("profiles-list");
+const historyModal = document.getElementById("history-modal");
+const historyTitle = document.getElementById("history-title");
+const historyList = document.getElementById("history-list");
+const importInput = document.getElementById("import-input");
+const importBanner = document.getElementById("import-banner");
+
+async function loadProfiles() {
+  const profiles = await getProfiles().catch(() => []);
+  if (profiles.length === 0) return; // keep empty state
+  list.innerHTML = `<div class="profile-grid">${profiles.map(renderCard).join("")}</div>`;
+  list.querySelectorAll("[data-start]").forEach(btn =>
+    btn.addEventListener("click", () => location.href = `/count.html?profile_id=${btn.dataset.start}`)
+  );
+  list.querySelectorAll("[data-history]").forEach(btn =>
+    btn.addEventListener("click", () => showHistory(btn.dataset.history, btn.dataset.name))
+  );
+  list.querySelectorAll("[data-delete]").forEach(btn =>
+    btn.addEventListener("click", () => confirmDelete(btn.dataset.delete))
+  );
+}
+
+function renderCard(p) {
+  return `
+    <div class="profile-card">
+      <h3>${escHtml(p.name)}</h3>
+      <p class="meta">Created ${new Date(p.created_at).toLocaleDateString()}</p>
+      <div class="actions">
+        <button class="btn btn-primary" style="flex:1" data-start="${p.id}">Start Counting</button>
+        <button class="btn btn-ghost" data-history="${p.id}" data-name="${escHtml(p.name)}">History</button>
+        <button class="btn btn-danger" data-delete="${p.id}">✕</button>
+      </div>
+    </div>`;
+}
+
+async function confirmDelete(id) {
+  if (!confirm("Delete this profile and all its sessions?")) return;
+  await deleteProfile(id).catch(e => alert(e.message));
+  loadProfiles();
+}
+
+async function showHistory(profileId, name) {
+  historyTitle.textContent = `${name} — Session History`;
+  historyList.innerHTML = `<p style="color:var(--clr-muted)">Loading…</p>`;
+  historyModal.classList.remove("hidden");
+  const sessions = await getSessions(profileId).catch(() => []);
+  if (sessions.length === 0) {
+    historyList.innerHTML = `<p style="color:var(--clr-muted)">No sessions yet.</p>`;
+    return;
+  }
+  historyList.innerHTML = sessions.map(s => `
+    <div class="card" style="margin-bottom:.75rem;padding:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <p style="font-weight:600">${new Date(s.started_at).toLocaleString()}</p>
+          <p style="font-size:.85rem;color:var(--clr-muted)">
+            ${s.ended_at ? "Ended " + new Date(s.ended_at).toLocaleTimeString() : "Active"}
+            &nbsp;·&nbsp; ↑ IN: ${s.total_in}  ↓ OUT: ${s.total_out}
+          </p>
+        </div>
+        <button class="btn btn-ghost" onclick="downloadCsv('${s.id}')">Export CSV</button>
+      </div>
+    </div>`).join("");
+}
+
+window.downloadCsv = async function(sessionId) {
+  const res = await exportSession(sessionId);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `session-${sessionId}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+};
+
+document.getElementById("close-history").addEventListener("click", () => historyModal.classList.add("hidden"));
+
+importInput.addEventListener("change", async () => {
+  const file = importInput.files[0];
+  if (!file) return;
+  try {
+    await importProfile(file);
+    importBanner.textContent = "Profile imported successfully!";
+    importBanner.classList.remove("hidden");
+    loadProfiles();
+    setTimeout(() => importBanner.classList.add("hidden"), 4000);
+  } catch (e) {
+    alert("Import failed: " + e.message);
+  }
+  importInput.value = "";
+});
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+loadProfiles();
+</script>
+</body>
+</html>

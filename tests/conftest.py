@@ -17,6 +17,13 @@ def make_solid_frame(width=640, height=480, color=(128, 128, 128)):
     return frame
 
 
+def door_frame(height=480, width=640):
+    """Dark frame with bright centre rectangle simulating a lit doorway."""
+    frame = make_solid_frame(width, height, color=(40, 40, 40))
+    frame[80:400, 160:480] = (200, 200, 200)
+    return frame
+
+
 def make_gradient_frame(width=640, height=480):
     """Return a left-to-right brightness gradient BGR frame."""
     frame = np.zeros((height, width, 3), dtype=np.uint8)
