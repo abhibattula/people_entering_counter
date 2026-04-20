@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import threading
 import time
 from typing import Optional, List, Tuple
@@ -6,6 +7,7 @@ from typing import Optional, List, Tuple
 import cv2
 import numpy as np
 
+from backend.config import MODEL_VARIANT
 from backend.services.model_service import get_model
 
 # ── Pure functions (testable without camera) ──────────────────────────────
@@ -93,7 +95,7 @@ class CountingService:
         self._queues_lock = threading.Lock()
         self._occupancy = OccupancyTracker()
         self._prev_centroids: dict[int, Tuple[int, int]] = {}
-        self._fps = 0.0
+        self._frame_times: collections.deque = collections.deque(maxlen=30)
 
     # ── Public interface ──────────────────────────────────────────────────
 
@@ -130,7 +132,10 @@ class CountingService:
         return self._running
 
     def get_fps(self) -> float:
-        return self._fps
+        d = self._frame_times
+        if len(d) >= 2:
+            return len(d) / (d[-1] - d[0])
+        return 0.0
 
     def get_latest_frame(self) -> Optional[bytes]:
         with self._frame_lock:
@@ -152,9 +157,6 @@ class CountingService:
         roi = profile["roi_polygon"]
         line = profile["counting_line"]
         direction = profile["inside_direction"]
-
-        t_last = time.time()
-        frame_count = 0
 
         while self._running:
             ret, frame = self._cap.read()
@@ -199,17 +201,20 @@ class CountingService:
 
                         self._prev_centroids[track_id] = centroid
 
-            # FPS overlay
-            frame_count += 1
-            now = time.time()
-            if now - t_last >= 1.0:
-                self._fps = frame_count / (now - t_last)
-                frame_count = 0
-                t_last = now
+            # FPS tracking
+            self._frame_times.append(time.time())
 
-            cv2.putText(annotated, f"{self._fps:.0f}fps | YOLOv8n",
-                        (10, annotated.shape[0] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            # FPS + model overlay (top-left, black shadow then white text)
+            fps_text = f"{self.get_fps():.1f} fps"
+            model_text = MODEL_VARIANT
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            scale, thickness, shadow = 0.6, 2, 1
+            for i, text in enumerate((fps_text, model_text)):
+                y = 25 + i * 25
+                # black shadow (1px offset)
+                cv2.putText(annotated, text, (11, y + 1), font, scale, (0, 0, 0), thickness + shadow)
+                # white text
+                cv2.putText(annotated, text, (10, y), font, scale, (255, 255, 255), thickness)
 
             _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
             with self._frame_lock:

@@ -11,7 +11,7 @@ from backend.config import LOGS_DIR, LOG_LEVEL, PROFILES_DIR
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)  # must precede handler attachment
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
     handler = logging.handlers.TimedRotatingFileHandler(

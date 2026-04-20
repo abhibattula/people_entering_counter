@@ -54,7 +54,17 @@ document.getElementById("btn-allow-camera").addEventListener("click", async () =
     document.getElementById("capture-preview").srcObject = stream;
     showStep(2);
   } catch (e) {
-    document.getElementById("permission-error").classList.remove("hidden");
+    const permError = document.getElementById("permission-error");
+    if (e.name === "NotAllowedError") {
+      permError.innerHTML =
+        "Camera access was denied. To re-enable:<br>" +
+        "<strong>Chrome:</strong> Click the camera icon in the address bar → Allow.<br>" +
+        "<strong>Firefox:</strong> Click the shield icon → Remove block.<br>" +
+        "<strong>Safari:</strong> Safari menu → Settings for this website → Camera → Allow.";
+    } else {
+      permError.innerHTML = "Camera error: " + e.message;
+    }
+    permError.classList.remove("hidden");
   }
 });
 
