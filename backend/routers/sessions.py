@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, Response
@@ -14,6 +14,9 @@ from backend.db.database import (
     get_events,
     list_sessions_for_profile,
 )
+from backend.services.counting_service import get_or_create_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,12 +74,11 @@ def pause_session(session_id: str):
         _paused_sessions.add(session_id)
 
         # Pause the counting service if running
-        from backend.services.counting_service import get_or_create_service
         try:
             svc = get_or_create_service(session["profile_id"])
             svc.pause()
         except Exception:
-            pass
+            logger.warning("Failed to pause counting service for session %s", session_id, exc_info=True)
     finally:
         conn.close()
     return Response(status_code=204)
@@ -93,12 +95,11 @@ def resume_session(session_id: str):
             raise HTTPException(409, detail="Session is not paused")
         _paused_sessions.discard(session_id)
 
-        from backend.services.counting_service import get_or_create_service
         try:
             svc = get_or_create_service(session["profile_id"])
             svc.resume()
         except Exception:
-            pass
+            logger.warning("Failed to resume counting service for session %s", session_id, exc_info=True)
     finally:
         conn.close()
     return Response(status_code=204)
