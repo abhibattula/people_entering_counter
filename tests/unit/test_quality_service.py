@@ -116,3 +116,38 @@ def test_returns_all_four_keys(mock_yolo):
     with patch("backend.services.quality_service.get_model", return_value=mock_yolo):
         result = assess_quality(frames)
     assert set(result.keys()) == {"door_fully_visible", "lighting_acceptable", "crowding_risk", "camera_adjustment"}
+
+
+# ── Extended quality tests (Phase 5 / T045-T048) ──────────────────────────
+
+def test_door_at_extreme_corner_still_visible():
+    """A door-shaped bright region near a corner edge is still detected as visible."""
+    from backend.services.quality_service import assess_quality
+    # Build a dark frame with a 200×300-pixel bright region anchored near top-left corner
+    frame = np.full((480, 640, 3), 40, dtype=np.uint8)
+    frame[10:210, 10:310] = 200  # bright rectangle at top-left, 10px away from border
+    frames = [frame] * 5
+    result = assess_quality(frames)
+    assert result["door_fully_visible"] is True
+
+
+def test_boundary_brightness_exactly_at_threshold():
+    """LAB L=60 (BGR≈56) passes; LAB L=59 (BGR≈55) fails."""
+    from backend.services.quality_service import assess_quality
+    # BGR=56 → LAB L mean ≈ 60 — exactly at lower boundary → should pass
+    frame_pass = solid(480, 640, 56)
+    result_pass = assess_quality([frame_pass] * 5)
+    assert result_pass["lighting_acceptable"] is True
+
+    # BGR=55 → LAB L mean ≈ 59 — one below boundary → should fail
+    frame_fail = solid(480, 640, 55)
+    result_fail = assess_quality([frame_fail] * 5)
+    assert result_fail["lighting_acceptable"] is False
+
+
+def test_single_frame_does_not_crash():
+    """assess_quality([one_frame]) must not raise and must return all four keys."""
+    from backend.services.quality_service import assess_quality
+    frames = [door_frame()]  # len == 1
+    result = assess_quality(frames)
+    assert set(result.keys()) == {"door_fully_visible", "lighting_acceptable", "crowding_risk", "camera_adjustment"}
