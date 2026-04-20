@@ -29,6 +29,13 @@ class StartSessionRequest(BaseModel):
 def start_session(body: StartSessionRequest):
     conn = get_connection()
     try:
+        # Check for an already-active session for this profile (spec §229)
+        active = conn.execute(
+            "SELECT id FROM sessions WHERE profile_id=? AND ended_at IS NULL LIMIT 1",
+            (body.profile_id,),
+        ).fetchone()
+        if active:
+            raise HTTPException(409, detail="A session for this profile is already active")
         session_id = create_session(conn, body.profile_id)
         session = get_session(conn, session_id)
         return {"session_id": session_id, "started_at": session["started_at"]}
