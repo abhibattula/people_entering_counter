@@ -118,6 +118,41 @@ Return the full profile JSON.
 
 ---
 
+### GET /api/profiles/{id}/export
+
+Download the profile as a JSON file (for backup or transfer to another machine).
+
+**Response 200**:
+```
+Content-Type: application/json
+Content-Disposition: attachment; filename="profile-{name}.json"
+```
+Body: full `DoorProfile` JSON object.
+
+**Response 404**: Profile not found.
+
+---
+
+### POST /api/profiles/import
+
+Import a previously exported profile JSON file.
+
+**Request**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | File | Yes | A `.json` file previously exported via `GET /api/profiles/{id}/export` |
+
+**Response 201**:
+```json
+{ "id": "new-uuid-v4", "created_at": "2026-04-20T14:30:00Z" }
+```
+A new UUID is assigned on import — the original ID from the exported file is not reused.
+
+**Response 422**: Invalid JSON, missing required fields, or schema validation failure.
+
+---
+
 ### DELETE /api/profiles/{id}
 
 Delete a profile and all its associated session events.

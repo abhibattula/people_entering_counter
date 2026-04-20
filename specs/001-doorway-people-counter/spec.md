@@ -113,7 +113,7 @@ After a counting session, the user can export the event log as a CSV file for us
 - What if two people cross the counting line simultaneously? → Both crossings are recorded independently using multi-person tracking; neither crossing is missed if the people are not heavily overlapping.
 - What if a person stands in the doorway without crossing? → No count recorded; only full crossings from one side to the other are counted.
 - What if a person is visible in the background but far from the door? → Not counted; only detections within the doorway boundary region are tracked.
-- What if the door opens and closes randomly mid-session? → A readiness warning is shown (if flagged at setup); the system may take up to 60 seconds to adapt before counts are reliable again.
+- What if the door opens and closes randomly mid-session? → A persistent warning banner is shown throughout the session (if `door_randomly_opens = true` was set at setup); counting is never automatically paused — the banner is informational only, reminding the user that accuracy may be reduced for up to 60 seconds after a door state change.
 - What if occupancy would go below zero (more OUTs than INs)? → Occupancy is floored at 0; an anomaly is logged for the session.
 
 ---
@@ -142,6 +142,10 @@ After a counting session, the user can export the event log as a CSV file for us
 - **FR-018**: The system MUST allow the user to export a session's event log as a CSV file.
 - **FR-019**: The system MUST allow the user to pause, resume, and stop a counting session.
 - **FR-020**: The system MUST release the camera cleanly when the user stops counting or navigates away.
+- **FR-021**: On server startup, the system MUST automatically close any sessions whose `ended_at` is NULL, setting `ended_at` to the server start time.
+- **FR-022**: The system MUST write diagnostic logs to `logs/app.log` with daily rotation at INFO level by default; DEBUG level MUST be activatable via an environment variable.
+- **FR-023**: Multiple browser tabs MAY connect to the same profile's MJPEG stream and WebSocket simultaneously; the counting loop runs once and all connected tabs receive the same events.
+- **FR-024**: The system MUST allow the user to export a door profile as a downloadable JSON file and import a profile from a previously exported JSON file.
 
 ### Key Entities
 
@@ -178,3 +182,15 @@ After a counting session, the user can export the event log as a CSV file for us
 - Cloud connectivity is not required; all processing and storage is local.
 - Retraining or fine-tuning the detection model is out of scope; the system uses a pre-trained model with region-of-interest filtering.
 - Mobile browser support is out of scope for v1.
+
+---
+
+## Clarifications
+
+### Session 2026-04-20
+
+- Q: When the server restarts and finds sessions with NULL ended_at, what should it do? → A: Auto-close all open sessions at server startup (set ended_at = startup time).
+- Q: Should the system write diagnostic logs, and if so where? → A: Write to `logs/app.log` with daily rotation; INFO by default, DEBUG via env var.
+- Q: How should the system handle a second browser tab opening the same profile's counting view while one is already active? → A: Allow it — multiple tabs watch the same stream; one counting loop runs, all tabs receive the same events.
+- Q: When a door-randomly-opens profile is active, how does the 60-second adaptation work? → A: Passive warning only — a persistent banner is shown throughout the session; counting is never automatically paused.
+- Q: Should the system support exporting and importing door profiles between machines? → A: Yes — export as downloadable JSON and import via file upload in the UI.
