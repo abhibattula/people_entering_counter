@@ -15,7 +15,7 @@ _BOUNDARY = b"--frame"
 _CONTENT_TYPE = b"Content-Type: image/jpeg\r\n\r\n"
 
 
-async def _mjpeg_generator(profile_id: str):
+async def _mjpeg_generator(profile_id: str, grayscale: bool = False):
     profile = _load_profile(profile_id)
     camera_index = profile.get("camera_index", CAMERA_INDEX)
 
@@ -34,7 +34,7 @@ async def _mjpeg_generator(profile_id: str):
 
 
 @router.get("/stream")
-async def mjpeg_stream(profile_id: str):
+async def mjpeg_stream(profile_id: str, grayscale: bool = False):
     profile = _load_profile(profile_id)
     camera_index = profile.get("camera_index", CAMERA_INDEX)
 
@@ -53,8 +53,10 @@ async def mjpeg_stream(profile_id: str):
                 status_code=503,
             )
 
+    svc.set_grayscale(grayscale)
+
     return StreamingResponse(
-        _mjpeg_generator(profile_id),
+        _mjpeg_generator(profile_id, grayscale=grayscale),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
 

@@ -80,6 +80,7 @@
     </div>
     <div style="display:flex;gap:.75rem;margin-top:.75rem">
       <button class="btn btn-ghost" id="btn-reject-proposal">No, retry</button>
+      <button class="btn btn-ghost" id="btn-flip-direction">↔ Flip direction</button>
       <button class="btn btn-primary" id="btn-accept-proposal">Yes, this looks right →</button>
     </div>
     <button class="btn btn-warning hidden" id="btn-draw-manual" style="margin-top:.5rem">Draw manually instead</button>
@@ -88,6 +89,7 @@
   <!-- Step 7: Manual draw fallback -->
   <div class="step" id="step-7">
     <div class="step-header"><h2>Draw Doorway Boundary</h2><p>Click to place 4 corners, then adjust the counting line</p></div>
+    <p id="draw-progress" style="color:var(--clr-muted);font-size:.9rem">Tap corner 1 of 4</p>
     <div class="canvas-wrapper">
       <canvas id="draw-canvas"></canvas>
     </div>

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/ -q --tb=no)",
+      "Bash(python -m pytest tests/unit/test_counting_service.py tests/unit/test_quality_service.py tests/unit/test_calibration_service.py -v)"
+    ]
+  }
+}
