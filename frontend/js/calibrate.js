@@ -19,12 +19,14 @@ let photoIndex = 0;
 
 let qualityResult = null;
 let proposalResult = null;
+let flippedDirection = null;
 let doorRandomlyOpens = false;
 
 // Manual draw state
 let drawPoints = [];        // [[x,y],...]
 let lineY = null;
 let dragging = null;
+let drawBgImage = null;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const steps = Array.from({ length: TOTAL_STEPS }, (_, i) => document.getElementById(`step-${i + 1}`));
@@ -200,6 +202,7 @@ document.getElementById("btn-continue-anyway").addEventListener("click", () => s
 // ── Step 6: Proposal ──────────────────────────────────────────────────────
 
 function showProposalStep() {
+  flippedDirection = null;
   const canvas = document.getElementById("proposal-canvas");
   const img = new Image();
   img.onload = () => {
@@ -220,6 +223,13 @@ function showProposalStep() {
   );
   showStep(6);
 }
+
+document.getElementById("btn-flip-direction").addEventListener("click", () => {
+  const FLIP = { up: "down", down: "up", left: "right", right: "left" };
+  proposalResult.inside_direction = FLIP[proposalResult.inside_direction] || proposalResult.inside_direction;
+  flippedDirection = proposalResult.inside_direction;
+  showProposalStep();
+});
 
 document.getElementById("btn-accept-proposal").addEventListener("click", () => showStep(8));
 
@@ -242,17 +252,19 @@ document.getElementById("btn-draw-manual").addEventListener("click", () => start
 // ── Step 7: Manual draw ───────────────────────────────────────────────────
 
 function startManualDraw() {
-  drawPoints = []; lineY = null;
+  drawPoints = []; lineY = null; drawBgImage = null;
+  document.getElementById("draw-progress").textContent = "Tap corner 1 of 4";
+  document.getElementById("btn-save-draw").disabled = true;
   const canvas = document.getElementById("draw-canvas");
   const img = new Image();
   img.onload = () => {
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    canvas.getContext("2d").drawImage(img, 0, 0);
+    drawBgImage = img;
+    redrawManual(canvas);
   };
   img.src = "data:image/jpeg;base64," + proposalResult.best_frame_b64;
   showStep(7);
-  redrawManual(canvas);
 }
 
 document.getElementById("draw-canvas").addEventListener("click", (e) => {
@@ -265,6 +277,9 @@ document.getElementById("draw-canvas").addEventListener("click", (e) => {
     if (drawPoints.length === 4) {
       lineY = Math.round(drawPoints.reduce((s, p) => s + p[1], 0) / 4);
       document.getElementById("btn-save-draw").disabled = false;
+      document.getElementById("draw-progress").textContent = "All corners placed — click Save →";
+    } else {
+      document.getElementById("draw-progress").textContent = `Tap corner ${drawPoints.length + 1} of 4`;
     }
     redrawManual(canvas);
   }
@@ -272,15 +287,29 @@ document.getElementById("draw-canvas").addEventListener("click", (e) => {
 
 function redrawManual(canvas) {
   const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (drawBgImage) ctx.drawImage(drawBgImage, 0, 0);
+
   if (drawPoints.length === 4) {
     drawPolygon(ctx, drawPoints, "#8000ff");
     const xs = drawPoints.map(p => p[0]);
     const line = { x1: Math.min(...xs), y1: lineY, x2: Math.max(...xs), y2: lineY };
     drawLine(ctx, line, "#ffff00");
   } else {
-    drawPoints.forEach(([x, y]) => {
+    drawPoints.forEach(([x, y], idx) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
       ctx.fillStyle = "#8000ff";
-      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fill();
+      ctx.fillStyle = "white";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(idx + 1), x, y);
     });
   }
 }

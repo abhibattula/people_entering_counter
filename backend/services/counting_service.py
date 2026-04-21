@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import logging
 import threading
 import time
 from typing import Optional, List, Tuple
@@ -9,6 +10,8 @@ import numpy as np
 
 from backend.config import MODEL_VARIANT
 from backend.services.model_service import get_model
+
+logger = logging.getLogger(__name__)
 
 # ── Pure functions (testable without camera) ──────────────────────────────
 
@@ -29,13 +32,12 @@ def detect_crossing(
         curr_above = curr_centroid[1] < mid_y
         if prev_above == curr_above:
             return None
-        # crossed — determine direction
-        moved_up = curr_above  # True = moved to lower y
+        moved_up = curr_above
         if inside_direction == "up":
             return "in" if moved_up else "out"
-        else:  # "down"
+        else:
             return "out" if moved_up else "in"
-    else:  # "left" or "right"
+    else:
         mid_x = (line["x1"] + line["x2"]) / 2
         prev_left = prev_centroid[0] < mid_x
         curr_left = curr_centroid[0] < mid_x
@@ -44,7 +46,7 @@ def detect_crossing(
         moved_left = curr_left
         if inside_direction == "left":
             return "in" if moved_left else "out"
-        else:  # "right"
+        else:
             return "out" if moved_left else "in"
 
 
@@ -88,6 +90,7 @@ class CountingService:
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._paused = False
+        self._grayscale = False
         self._profile: Optional[dict] = None
         self._latest_frame: Optional[bytes] = None
         self._frame_lock = threading.Lock()
@@ -108,6 +111,17 @@ class CountingService:
         self._cap = cv2.VideoCapture(camera_index)
         if not self._cap.isOpened():
             raise RuntimeError(f"Cannot open camera {camera_index}")
+        # Apply profile resolution so ROI coordinates match actual frame size
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, profile["frame_width"])
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, profile["frame_height"])
+        actual_w = self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        actual_h = self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        if actual_w != profile["frame_width"] or actual_h != profile["frame_height"]:
+            logger.warning(
+                "Camera returned %dx%d but profile requested %dx%d",
+                int(actual_w), int(actual_h),
+                profile["frame_width"], profile["frame_height"],
+            )
         self._running = True
         self._paused = False
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -131,10 +145,13 @@ class CountingService:
     def is_running(self) -> bool:
         return self._running
 
+    def set_grayscale(self, enabled: bool) -> None:
+        self._grayscale = enabled
+
     def get_fps(self) -> float:
         d = self._frame_times
-        if len(d) >= 2:
-            return len(d) / (d[-1] - d[0])
+        if len(d) >= 2 and d[-1] != d[0]:
+            return (len(d) - 1) / (d[-1] - d[0])
         return 0.0
 
     def get_latest_frame(self) -> Optional[bytes]:
@@ -152,82 +169,130 @@ class CountingService:
     # ── Background loop ───────────────────────────────────────────────────
 
     def _loop(self) -> None:
-        model = get_model()
-        profile = self._profile
-        roi = profile["roi_polygon"]
-        line = profile["counting_line"]
-        direction = profile["inside_direction"]
+        try:
+            model = get_model()
+            profile = self._profile
+            roi = profile["roi_polygon"]
+            line = profile["counting_line"]
+            direction = profile["inside_direction"]
 
-        while self._running:
-            ret, frame = self._cap.read()
-            if not ret:
-                time.sleep(0.05)
+            while self._running:
+                ret, frame = self._cap.read()
+                if not ret:
+                    time.sleep(0.05)
+                    continue
+
+                results = model.track(frame, persist=True, verbose=False, tracker="bytetrack.yaml")
+
+                annotated = frame.copy()
+                self._draw_overlays(annotated, roi, line, direction)
+
+                if not self._paused and results:
+                    self._render_detections(results, roi, line, direction, annotated)
+                    for crossing in self._check_crossings(results, roi, line, direction):
+                        self._occupancy.record(crossing)
+                        self._emit_event(crossing, self._occupancy.occupancy)
+
+                # FPS tracking
+                self._frame_times.append(time.time())
+
+                fps_text = f"{self.get_fps():.1f} fps"
+                model_text = MODEL_VARIANT
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                scale, thickness, shadow = 0.6, 2, 1
+                for i, text in enumerate((fps_text, model_text)):
+                    y = 25 + i * 25
+                    cv2.putText(annotated, text, (11, y + 1), font, scale, (0, 0, 0), thickness + shadow)
+                    cv2.putText(annotated, text, (10, y), font, scale, (255, 255, 255), thickness)
+
+                if self._grayscale:
+                    annotated = cv2.cvtColor(cv2.cvtColor(annotated, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+
+                _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                with self._frame_lock:
+                    self._latest_frame = buf.tobytes()
+
+        except Exception:
+            logger.exception("Counting loop error")
+            self._running = False
+
+    def _render_detections(self, results, roi, line, direction, annotated) -> None:
+        """Draw bounding boxes for all class-0 detections inside ROI regardless of track ID."""
+        for r in results:
+            if r.boxes is None:
                 continue
+            boxes = r.boxes.xyxy.cpu().numpy() if hasattr(r.boxes.xyxy, "cpu") else r.boxes.xyxy
+            cls = r.boxes.cls.cpu().numpy() if hasattr(r.boxes.cls, "cpu") else r.boxes.cls
+            has_ids = r.boxes.id is not None
 
-            results = model.track(frame, persist=True, verbose=False, tracker="bytetrack.yaml")
+            for i, (box, c) in enumerate(zip(boxes, cls)):
+                if int(c) != 0:
+                    continue
+                cx = int((box[0] + box[2]) / 2)
+                cy = int((box[1] + box[3]) / 2)
+                if not is_inside_roi((cx, cy), roi):
+                    continue
 
-            annotated = frame.copy()
-            self._draw_overlays(annotated, roi, line, direction)
-
-            if not self._paused and results:
-                for r in results:
-                    if r.boxes is None or r.boxes.id is None:
-                        continue
-                    boxes = r.boxes.xyxy.cpu().numpy() if hasattr(r.boxes.xyxy, "cpu") else r.boxes.xyxy
+                if has_ids:
+                    color = (0, 255, 0)  # bright green — tracked
                     ids = r.boxes.id.cpu().numpy().astype(int) if hasattr(r.boxes.id, "cpu") else r.boxes.id.astype(int)
-                    cls = r.boxes.cls.cpu().numpy() if hasattr(r.boxes.cls, "cpu") else r.boxes.cls
+                    track_id = ids[i]
+                    label = f"ID:{track_id}"
+                else:
+                    color = (0, 180, 0)  # dim green — detected but not yet tracked
+                    label = "person"
 
-                    for box, track_id, c in zip(boxes, ids, cls):
-                        if int(c) != 0:  # only persons
-                            continue
-                        cx = int((box[0] + box[2]) / 2)
-                        cy = int((box[1] + box[3]) / 2)
-                        centroid = (cx, cy)
+                cv2.rectangle(annotated, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), color, 2)
+                cv2.putText(annotated, label, (int(box[0]), int(box[1]) - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-                        if not is_inside_roi(centroid, roi):
-                            continue
+    def _check_crossings(self, results, roi, line, direction) -> list:
+        """Return list of crossing directions ("in"/"out") for tracked persons crossing the line."""
+        crossings = []
+        for r in results:
+            if r.boxes is None or r.boxes.id is None:
+                continue
+            boxes = r.boxes.xyxy.cpu().numpy() if hasattr(r.boxes.xyxy, "cpu") else r.boxes.xyxy
+            ids = r.boxes.id.cpu().numpy().astype(int) if hasattr(r.boxes.id, "cpu") else r.boxes.id.astype(int)
+            cls = r.boxes.cls.cpu().numpy() if hasattr(r.boxes.cls, "cpu") else r.boxes.cls
 
-                        cv2.rectangle(annotated, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
-                        cv2.putText(annotated, f"ID:{track_id}", (int(box[0]), int(box[1]) - 5),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
-                        if track_id in self._prev_centroids:
-                            crossing = detect_crossing(
-                                self._prev_centroids[track_id], centroid, line, direction
-                            )
-                            if crossing:
-                                self._occupancy.record(crossing)
-                                self._emit_event(crossing, self._occupancy.occupancy)
-
-                        self._prev_centroids[track_id] = centroid
-
-            # FPS tracking
-            self._frame_times.append(time.time())
-
-            # FPS + model overlay (top-left, black shadow then white text)
-            fps_text = f"{self.get_fps():.1f} fps"
-            model_text = MODEL_VARIANT
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            scale, thickness, shadow = 0.6, 2, 1
-            for i, text in enumerate((fps_text, model_text)):
-                y = 25 + i * 25
-                # black shadow (1px offset)
-                cv2.putText(annotated, text, (11, y + 1), font, scale, (0, 0, 0), thickness + shadow)
-                # white text
-                cv2.putText(annotated, text, (10, y), font, scale, (255, 255, 255), thickness)
-
-            _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            with self._frame_lock:
-                self._latest_frame = buf.tobytes()
+            for box, track_id, c in zip(boxes, ids, cls):
+                if int(c) != 0:
+                    continue
+                cx = int((box[0] + box[2]) / 2)
+                cy = int((box[1] + box[3]) / 2)
+                centroid = (cx, cy)
+                if not is_inside_roi(centroid, roi):
+                    continue
+                if track_id in self._prev_centroids:
+                    crossing = detect_crossing(self._prev_centroids[track_id], centroid, line, direction)
+                    if crossing:
+                        crossings.append(crossing)
+                self._prev_centroids[track_id] = centroid
+        return crossings
 
     def _draw_overlays(self, frame, roi, line, direction):
-        # ROI polygon (purple dashed)
+        # ROI polygon (purple)
         pts = np.array(roi, dtype=np.int32).reshape(-1, 1, 2)
         cv2.polylines(frame, [pts], True, (128, 0, 128), 1, cv2.LINE_AA)
-        # Counting line (yellow)
-        cv2.line(frame, (line["x1"], line["y1"]), (line["x2"], line["y2"]), (0, 255, 255), 2)
-        # Direction arrow
+
+        # DOOR label above ROI
+        xs = [p[0] for p in roi]
+        ys = [p[1] for p in roi]
+        min_x, min_y = min(xs), min(ys)
+        label_y = max(min_y - 8, 15)
+        cv2.putText(frame, "DOOR", (min_x, label_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 0, 128), 2)
+
+        # Counting line (yellow, 3px thick)
+        cv2.line(frame, (line["x1"], line["y1"]), (line["x2"], line["y2"]), (0, 255, 255), 3)
+
+        # COUNT LINE label
         mx = (line["x1"] + line["x2"]) // 2
+        cv2.putText(frame, "COUNT LINE", (mx - 50, line["y1"] - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+
+        # Direction arrow
         my = line["y1"]
         dmap = {"up": (0, -25), "down": (0, 25), "left": (-25, 0), "right": (25, 0)}
         dx, dy = dmap.get(direction, (0, -25))

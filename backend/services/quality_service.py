@@ -38,22 +38,48 @@ def _check_lighting(frames: List[np.ndarray]) -> bool:
 
 # ── Door visibility ───────────────────────────────────────────────────────
 
+def _contour_touches_n_edges(contours, frame_shape, n: int = 2) -> bool:
+    """Return True if any contour's bounding rect touches at least n frame edges."""
+    h, w = frame_shape[:2]
+    margin = 5
+    for cnt in contours:
+        x, y, cw, ch = cv2.boundingRect(cnt)
+        edges_touched = 0
+        if x <= margin:
+            edges_touched += 1
+        if y <= margin:
+            edges_touched += 1
+        if x + cw >= w - margin:
+            edges_touched += 1
+        if y + ch >= h - margin:
+            edges_touched += 1
+        if edges_touched >= n:
+            return True
+    return False
+
+
 def _check_door_visibility(frames: List[np.ndarray]) -> bool:
     """
-    A door is considered visible when there are strong edges indicating
-    a rectangular structure with significant contrast in the frame.
+    Door is visible when strong edges exist AND at least one contour covers
+    ≥5% of the frame area (a real door frame) OR a contour spans ≥2 frame
+    edges. This rejects blank walls (no edges), and interior grid patterns
+    (many tiny contours, none large enough).
     """
-    scores = []
+    results = []
     for f in frames:
         gray = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150)
-        # Count edge pixels; a meaningful doorway produces many edge pixels
-        scores.append(np.count_nonzero(edges))
-    avg_edges = np.mean(scores) if scores else 0
-    h, w = frames[0].shape[:2]
-    frame_area = h * w
-    # If edges cover more than 0.3% of the frame there's visible structure
-    return avg_edges > frame_area * 0.003
+        edge_count = np.count_nonzero(edges)
+        frame_area = f.shape[0] * f.shape[1]
+        has_edges = edge_count > frame_area * 0.003
+        if not has_edges:
+            results.append(False)
+            continue
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        has_large_contour = any(cv2.contourArea(c) >= frame_area * 0.05 for c in contours)
+        touches_edges = _contour_touches_n_edges(contours, f.shape)
+        results.append(has_large_contour or touches_edges)
+    return bool(np.mean(results) > 0.5) if results else False
 
 
 # ── Crowding risk ─────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ if (!profileId) location.href = "/";
 let sessionId = null;
 let inCount = 0, outCount = 0;
 let paused = false;
+let grayscaleOn = false;
 let ws = null;
 let wsRetries = 0;
 const MAX_WS_RETRIES = 5;
@@ -24,6 +25,7 @@ const reconnBanner   = document.getElementById("reconnect-banner");
 const btnPause       = document.getElementById("btn-pause");
 const btnStop        = document.getElementById("btn-stop");
 const btnExport      = document.getElementById("btn-export");
+const btnGrayscale   = document.getElementById("btn-grayscale");
 const btnReloadStream = document.getElementById("btn-reload-stream");
 
 // ── Init ─────────────────────────────────────────────────────────────────
@@ -46,7 +48,8 @@ async function init() {
 // ── MJPEG stream ──────────────────────────────────────────────────────────
 
 function startStream() {
-  streamImg.src = `/stream?profile_id=${profileId}&t=${Date.now()}`;
+  const gs = grayscaleOn ? "&grayscale=true" : "";
+  streamImg.src = `/stream?profile_id=${profileId}&t=${Date.now()}${gs}`;
   streamImg.onerror = onStreamError;
   streamImg.onload = () => streamError.classList.add("hidden");
 }
@@ -122,6 +125,12 @@ btnStop.addEventListener("click", async () => {
   if (ws) ws.close(1001);
   streamImg.src = "";
   location.href = "/";
+});
+
+btnGrayscale.addEventListener("click", () => {
+  grayscaleOn = !grayscaleOn;
+  btnGrayscale.textContent = grayscaleOn ? "🎨 Colour" : "🔲 Grayscale";
+  startStream();
 });
 
 btnExport.addEventListener("click", async () => {

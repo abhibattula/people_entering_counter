@@ -145,6 +145,36 @@ def test_boundary_brightness_exactly_at_threshold():
     assert result_fail["lighting_acceptable"] is False
 
 
+# ── Tightened door visibility (T012) ─────────────────────────────────────
+
+def test_plain_wall_fails_visibility():
+    """A solid frame with many edges but no contour reaching 2 frame edges must fail."""
+    from backend.services.quality_service import assess_quality
+    # Create a frame where edges are distributed throughout but no single contour
+    # spans across the frame from edge to edge (e.g., many small internal patterns)
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    # Draw grid of small boxes in the interior — many edges but none reach frame border
+    for y in range(100, 400, 50):
+        for x in range(100, 550, 50):
+            frame[y:y+30, x:x+30] = 200
+    result = assess_quality([frame] * 5)
+    assert result["door_fully_visible"] is False, (
+        "Many interior edges with no contour reaching frame edges should fail visibility"
+    )
+
+
+def test_solid_colour_wall_fails_visibility():
+    """A solid white frame (like a blank wall) must fail door visibility."""
+    from backend.services.quality_service import assess_quality
+    # Solid white has many edge pixels near the frame boundary from the white→black frame edge
+    # but NO internal contour spanning 2 frame edges
+    frame = np.full((480, 640, 3), 200, dtype=np.uint8)
+    result = assess_quality([frame] * 5)
+    assert result["door_fully_visible"] is False, (
+        "Solid colour frame (no door) should fail visibility check"
+    )
+
+
 def test_single_frame_does_not_crash():
     """assess_quality([one_frame]) must not raise and must return all four keys."""
     from backend.services.quality_service import assess_quality

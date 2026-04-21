@@ -92,6 +92,61 @@ def test_manual_fallback_not_available_on_first_try(mock_yolo):
     assert result["manual_fallback_available"] is False
 
 
+# ── YOLO heatmap bias (T010) ──────────────────────────────────────────────
+
+def test_proposal_roi_overlaps_yolo_person_corridor():
+    """ROI polygon must favour the region where people appeared in YOLO detections."""
+    import numpy as np
+    from unittest.mock import patch
+    from tests.conftest import make_mock_yolo, make_solid_frame
+    from backend.services.calibration_service import propose_doorway
+
+    # Frames: dark background with a bright rectangle on the LEFT half
+    frames = []
+    for _ in range(5):
+        f = make_solid_frame(640, 480, color=(30, 30, 30))
+        f[:, :320] = (180, 180, 180)          # bright left half only
+        frames.append(f)
+
+    # YOLO detects people only in the LEFT half
+    person_in_left = make_mock_yolo([[20, 100, 200, 400]])  # box entirely in x < 320
+
+    with patch("backend.services.calibration_service.get_model", return_value=person_in_left):
+        result = propose_doorway(frames, mode="photo")
+
+    roi = result["roi_polygon"]
+    xs = [pt[0] for pt in roi]
+    # The centroid of the proposed ROI should be in the left half of the 640-wide frame
+    assert (min(xs) + max(xs)) / 2 < 400, (
+        f"ROI centroid x={((min(xs)+max(xs))/2):.0f} expected in left half (x<400)"
+    )
+
+
+# ── Polygon corner selection (T011) ──────────────────────────────────────
+
+def test_polygon_has_exactly_four_corners(mock_yolo):
+    from backend.services.calibration_service import propose_doorway
+    with patch("backend.services.calibration_service.get_model", return_value=mock_yolo):
+        result = propose_doorway(make_frames(), mode="photo")
+    assert len(result["roi_polygon"]) == 4
+
+
+def test_polygon_corners_ordered_tl_tr_br_bl(mock_yolo):
+    """Points must be ordered: top-left, top-right, bottom-right, bottom-left."""
+    from backend.services.calibration_service import propose_doorway
+    with patch("backend.services.calibration_service.get_model", return_value=mock_yolo):
+        result = propose_doorway(make_frames(), mode="photo")
+    tl, tr, br, bl = result["roi_polygon"]
+    # top two have smaller y than bottom two
+    assert tl[1] <= br[1] and tl[1] <= bl[1]
+    assert tr[1] <= br[1] and tr[1] <= bl[1]
+    # left two have smaller x than right two
+    assert tl[0] <= tr[0]
+    assert bl[0] <= br[0]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+
 def test_retry_raises_after_max(mock_yolo):
     from backend.services.calibration_service import CalibrationSession, TooManyRetriesError
     session = CalibrationSession()

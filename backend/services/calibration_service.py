@@ -57,13 +57,40 @@ def propose_doorway(frames: List[np.ndarray], mode: str) -> dict:
 
 # ── ROI detection ─────────────────────────────────────────────────────────
 
+def _build_person_mask(frames: List[np.ndarray], model) -> np.ndarray:
+    """
+    Run YOLO on each frame and accumulate a binary mask where person bounding
+    boxes appear. Returns a blurred float32 mask (0–1) over the frame shape.
+    """
+    h, w = frames[0].shape[:2]
+    mask = np.zeros((h, w), dtype=np.float32)
+    for frame in frames:
+        results = model(frame, verbose=False)
+        for r in results:
+            if r.boxes is None:
+                continue
+            boxes = r.boxes.xyxy.cpu().numpy() if hasattr(r.boxes.xyxy, "cpu") else r.boxes.xyxy
+            cls = r.boxes.cls.cpu().numpy() if hasattr(r.boxes.cls, "cpu") else r.boxes.cls
+            for box, c in zip(boxes, cls):
+                if int(c) == 0:  # person class
+                    x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                    mask[y1:y2, x1:x2] += 1.0
+    if mask.max() > 0:
+        mask /= mask.max()
+    return cv2.GaussianBlur(mask, (31, 31), 0)
+
+
 def _detect_roi(frames: List[np.ndarray], w: int, h: int):
     """
-    Use Canny edge detection + contour analysis to find the dominant
+    Use Canny edge detection + YOLO person heatmap to find the dominant
     rectangular region (the door frame). Falls back to a centred default.
     """
+    model = get_model()
+    person_mask = _build_person_mask(frames, model)
+    has_persons = person_mask.max() > 0
+
     best_contour = None
-    best_area = 0
+    best_score = 0.0
     confidence = 0.5
 
     for frame in frames:
@@ -73,23 +100,33 @@ def _detect_roi(frames: List[np.ndarray], w: int, h: int):
         dilated = cv2.dilate(edges, None, iterations=2)
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        frame_area = w * h
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            frame_area = w * h
             ratio = area / frame_area
-            if 0.10 <= ratio <= 0.80 and area > best_area:
-                best_area = area
+            if not (0.10 <= ratio <= 0.80):
+                continue
+
+            if has_persons:
+                # Score by area AND overlap with person-density corridor
+                cnt_mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.drawContours(cnt_mask, [cnt], -1, 1, thickness=cv2.FILLED)
+                overlap = float(np.sum(person_mask * cnt_mask)) / (area + 1e-6)
+                score = ratio * (1.0 + overlap)
+            else:
+                score = ratio
+
+            if score > best_score:
+                best_score = score
                 best_contour = cnt
                 confidence = min(0.95, 0.5 + ratio)
 
     if best_contour is not None:
-        hull = cv2.convexHull(best_contour)
-        epsilon = 0.02 * cv2.arcLength(hull, True)
-        approx = cv2.approxPolyDP(hull, epsilon, True)
-        pts = approx.reshape(-1, 2).tolist()
-        if len(pts) >= 4:
-            pts = _order_quad(pts[:4])
-            return pts, confidence
+        # Use minAreaRect for stable 4-point extraction regardless of contour complexity
+        rect = cv2.minAreaRect(best_contour)
+        box = cv2.boxPoints(rect).astype(int).tolist()
+        pts = _order_quad(box)
+        return pts, confidence
 
     # fallback: centred region covering ~40% of frame
     margin_x, margin_y = int(w * 0.25), int(h * 0.15)
