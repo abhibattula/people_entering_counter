@@ -1,4 +1,4 @@
-import { getProfile, startSession, endSession, pauseSession, resumeSession, exportSession } from "/js/api.js";
+import { getProfile, startSession, endSession, pauseSession, resumeSession, exportSession, flipDirection } from "/js/api.js";
 import { formatTime } from "/js/utils.js";
 
 const params = new URLSearchParams(location.search);
@@ -22,11 +22,16 @@ const eventsLog      = document.getElementById("events-log");
 const profileName    = document.getElementById("profile-name");
 const doorBanner     = document.getElementById("door-banner");
 const reconnBanner   = document.getElementById("reconnect-banner");
-const btnPause       = document.getElementById("btn-pause");
-const btnStop        = document.getElementById("btn-stop");
-const btnExport      = document.getElementById("btn-export");
-const btnGrayscale   = document.getElementById("btn-grayscale");
+const btnPause        = document.getElementById("btn-pause");
+const btnStop         = document.getElementById("btn-stop");
+const btnFlip         = document.getElementById("btn-flip");
+const btnExport       = document.getElementById("btn-export");
+const btnGrayscale    = document.getElementById("btn-grayscale");
 const btnReloadStream = document.getElementById("btn-reload-stream");
+const stopBackdrop    = document.getElementById("stop-backdrop");
+const stopModal       = document.getElementById("stop-modal");
+const btnStopCancel   = document.getElementById("btn-stop-cancel");
+const btnStopConfirm  = document.getElementById("btn-stop-confirm");
 
 // ── Init ─────────────────────────────────────────────────────────────────
 
@@ -39,7 +44,7 @@ async function init() {
 
   const session = await startSession(profileId).catch(e => { alert(e.message); return null; });
   if (!session) return;
-  sessionId = session.session_id;
+  sessionId = session.session_id;  // works for both new (201) and reused (200) sessions
 
   startStream();
   connectWs();
@@ -119,12 +124,28 @@ btnPause.addEventListener("click", async () => {
   }
 });
 
-btnStop.addEventListener("click", async () => {
-  if (!confirm("Stop this counting session?")) return;
+btnStop.addEventListener("click", () => {
+  stopBackdrop.classList.remove("hidden");
+  stopModal.classList.remove("hidden");
+});
+
+btnStopCancel.addEventListener("click", () => {
+  stopBackdrop.classList.add("hidden");
+  stopModal.classList.add("hidden");
+});
+
+btnStopConfirm.addEventListener("click", async () => {
+  stopBackdrop.classList.add("hidden");
+  stopModal.classList.add("hidden");
   if (sessionId) await endSession(sessionId).catch(console.error);
   if (ws) ws.close(1001);
   streamImg.src = "";
   location.href = "/";
+});
+
+btnFlip.addEventListener("click", async () => {
+  await flipDirection(profileId).catch(console.error);
+  startStream();  // reload stream URL so new direction arrow appears immediately
 });
 
 btnGrayscale.addEventListener("click", () => {

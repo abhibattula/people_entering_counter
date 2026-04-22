@@ -24,13 +24,14 @@ export async function importProfile(file) {
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────
-export const startSession   = (profileId) => _req("POST", "/api/sessions/start", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile_id: profileId }) });
-export const endSession     = (id)        => _req("POST", `/api/sessions/${id}/end`);
-export const pauseSession   = (id)        => _req("POST", `/api/sessions/${id}/pause`);
-export const resumeSession  = (id)        => _req("POST", `/api/sessions/${id}/resume`);
-export const getEvents      = (id)        => _req("GET",  `/api/sessions/${id}/events`);
-export const getSessions    = (profileId) => _req("GET",  `/api/sessions?profile_id=${profileId}`);
+export const startSession   = (profileId) => _req("POST",  "/api/sessions/start", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile_id: profileId }) });
+export const endSession     = (id)        => _req("POST",  `/api/sessions/${id}/end`);
+export const pauseSession   = (id)        => _req("POST",  `/api/sessions/${id}/pause`);
+export const resumeSession  = (id)        => _req("POST",  `/api/sessions/${id}/resume`);
+export const getEvents      = (id)        => _req("GET",   `/api/sessions/${id}/events`);
+export const getSessions    = (profileId) => _req("GET",   `/api/sessions?profile_id=${profileId}`);
 export const exportSession  = (id)        => fetch(`/api/sessions/${id}/export`);
+export const flipDirection  = (id)        => _req("PATCH", `/api/profiles/${id}/direction`);
 
 // ── Calibration ───────────────────────────────────────────────────────────
 export async function startCalibration(frames, mode) {

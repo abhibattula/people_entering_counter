@@ -9,8 +9,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, field_validator
 
 from backend.config import PROFILES_DIR
+from backend.services.counting_service import get_or_create_service
 
 router = APIRouter()
+
+_FLIP = {"up": "down", "down": "up", "left": "right", "right": "left"}
 
 
 # ── Schema ────────────────────────────────────────────────────────────────
@@ -138,6 +141,23 @@ async def import_profile(file: UploadFile = File(...)):
 @router.get("/profiles/{profile_id}")
 def get_profile(profile_id: str):
     return _load_profile(profile_id)
+
+
+@router.patch("/profiles/{profile_id}/direction")
+def flip_direction(profile_id: str):
+    data = _load_profile(profile_id)
+    current = data.get("inside_direction", "down")
+    new_dir = _FLIP.get(current, "down")
+    data["inside_direction"] = new_dir
+    _save_profile(data)
+    # Update the running service if one exists for this profile
+    try:
+        svc = get_or_create_service(profile_id)
+        if svc.is_running():
+            svc.set_direction(new_dir)
+    except Exception:
+        pass
+    return {"inside_direction": new_dir}
 
 
 @router.delete("/profiles/{profile_id}", status_code=204)

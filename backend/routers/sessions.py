@@ -3,7 +3,7 @@ import io
 import logging
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, JSONResponse
 from pydantic import BaseModel
 
 from backend.db.database import (
@@ -14,7 +14,7 @@ from backend.db.database import (
     get_events,
     list_sessions_for_profile,
 )
-from backend.services.counting_service import get_or_create_service
+from backend.services.counting_service import get_or_create_service, stop_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +32,16 @@ class StartSessionRequest(BaseModel):
 def start_session(body: StartSessionRequest):
     conn = get_connection()
     try:
-        # Check for an already-active session for this profile (spec §229)
+        # Reuse an already-active session rather than rejecting the request
         active = conn.execute(
-            "SELECT id FROM sessions WHERE profile_id=? AND ended_at IS NULL LIMIT 1",
+            "SELECT id, started_at FROM sessions WHERE profile_id=? AND ended_at IS NULL LIMIT 1",
             (body.profile_id,),
         ).fetchone()
         if active:
-            raise HTTPException(409, detail="A session for this profile is already active")
+            return JSONResponse(
+                {"session_id": active["id"], "started_at": active["started_at"]},
+                status_code=200,
+            )
         session_id = create_session(conn, body.profile_id)
         session = get_session(conn, session_id)
         return {"session_id": session_id, "started_at": session["started_at"]}
@@ -53,10 +56,12 @@ def end_session_route(session_id: str):
         session = get_session(conn, session_id)
         if not session:
             raise HTTPException(404, detail="Session not found")
+        profile_id = session["profile_id"]
         end_session(conn, session_id)
         _paused_sessions.discard(session_id)
     finally:
         conn.close()
+    stop_service(profile_id)
     return Response(status_code=204)
 
 

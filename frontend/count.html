@@ -16,6 +16,7 @@
       <h1 id="profile-name" style="font-size:1.2rem">Loading…</h1>
     </div>
     <div style="display:flex;gap:.75rem">
+      <button class="btn btn-ghost" id="btn-flip">↔ Flip Direction</button>
       <button class="btn btn-ghost" id="btn-pause">⏸ Pause</button>
       <button class="btn btn-danger" id="btn-stop">■ Stop</button>
     </div>
@@ -70,6 +71,19 @@
   <!-- Reconnecting banner -->
   <div id="reconnect-banner" class="banner banner-info hidden" style="margin-top:1rem">
     WebSocket disconnected — reconnecting…
+  </div>
+</div>
+
+<!-- Stop confirmation modal -->
+<div id="stop-backdrop" class="modal-backdrop hidden"></div>
+<div id="stop-modal" class="modal hidden">
+  <h2 style="font-size:1.1rem;margin-bottom:.5rem">Stop counting session?</h2>
+  <p style="color:var(--clr-muted);font-size:.9rem;margin-bottom:1.25rem">
+    The camera will be released and you'll return to the profile list.
+  </p>
+  <div style="display:flex;gap:.75rem;justify-content:flex-end">
+    <button class="btn btn-ghost" id="btn-stop-cancel">Cancel</button>
+    <button class="btn btn-danger" id="btn-stop-confirm">Stop &amp; Exit</button>
   </div>
 </div>
 

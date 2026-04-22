@@ -148,6 +148,10 @@ class CountingService:
     def set_grayscale(self, enabled: bool) -> None:
         self._grayscale = enabled
 
+    def set_direction(self, direction: str) -> None:
+        if self._profile:
+            self._profile["inside_direction"] = direction
+
     def get_fps(self) -> float:
         d = self._frame_times
         if len(d) >= 2 and d[-1] != d[0]:
@@ -174,9 +178,10 @@ class CountingService:
             profile = self._profile
             roi = profile["roi_polygon"]
             line = profile["counting_line"]
-            direction = profile["inside_direction"]
 
             while self._running:
+                direction = profile["inside_direction"]  # read each frame so flip takes effect live
+
                 ret, frame = self._cap.read()
                 if not ret:
                     time.sleep(0.05)
@@ -272,31 +277,49 @@ class CountingService:
         return crossings
 
     def _draw_overlays(self, frame, roi, line, direction):
-        # ROI polygon (purple)
-        pts = np.array(roi, dtype=np.int32).reshape(-1, 1, 2)
-        cv2.polylines(frame, [pts], True, (128, 0, 128), 1, cv2.LINE_AA)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        purple = (128, 0, 128)
+        yellow = (0, 255, 255)
 
-        # DOOR label above ROI
+        # ROI polygon (purple, 2px)
+        pts = np.array(roi, dtype=np.int32).reshape(-1, 1, 2)
+        cv2.polylines(frame, [pts], True, purple, 2, cv2.LINE_AA)
+
+        # "HUMAN DOOR" label with black background for readability
         xs = [p[0] for p in roi]
         ys = [p[1] for p in roi]
         min_x, min_y = min(xs), min(ys)
-        label_y = max(min_y - 8, 15)
-        cv2.putText(frame, "DOOR", (min_x, label_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 0, 128), 2)
+        label_y = max(min_y - 8, 20)
+        (tw, th), _ = cv2.getTextSize("HUMAN DOOR", font, 0.6, 2)
+        cv2.rectangle(frame, (min_x - 2, label_y - th - 4), (min_x + tw + 2, label_y + 4), (0, 0, 0), -1)
+        cv2.putText(frame, "HUMAN DOOR", (min_x, label_y), font, 0.6, purple, 2)
 
-        # Counting line (yellow, 3px thick)
-        cv2.line(frame, (line["x1"], line["y1"]), (line["x2"], line["y2"]), (0, 255, 255), 3)
+        # Virtual counting line (yellow, 3px)
+        cv2.line(frame, (line["x1"], line["y1"]), (line["x2"], line["y2"]), yellow, 3)
 
-        # COUNT LINE label
         mx = (line["x1"] + line["x2"]) // 2
-        cv2.putText(frame, "COUNT LINE", (mx - 50, line["y1"] - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        my = line["y1"]
+
+        # "VIRTUAL LINE" label centred above the line
+        (vlw, _), _ = cv2.getTextSize("VIRTUAL LINE", font, 0.45, 1)
+        cv2.putText(frame, "VIRTUAL LINE", (mx - vlw // 2, my - 10), font, 0.45, yellow, 1)
 
         # Direction arrow
-        my = line["y1"]
         dmap = {"up": (0, -25), "down": (0, 25), "left": (-25, 0), "right": (25, 0)}
         dx, dy = dmap.get(direction, (0, -25))
         cv2.arrowedLine(frame, (mx, my), (mx + dx, my + dy), (0, 200, 0), 2, tipLength=0.4)
+
+        # IN / OUT flanking labels (adapt to direction)
+        in_label  = {"up": "^ IN",  "down": "v IN",  "left": "< IN",  "right": "> IN" }.get(direction, "IN")
+        out_label = {"up": "v OUT", "down": "^ OUT", "left": "> OUT", "right": "< OUT"}.get(direction, "OUT")
+        if direction in ("up", "down"):
+            in_side  = (mx + 12, my + (20 if direction == "down" else -14))
+            out_side = (mx + 12, my + (-14 if direction == "down" else 20))
+        else:
+            in_side  = (mx + (20 if direction == "right" else -60), my - 6)
+            out_side = (mx + (-60 if direction == "right" else 20), my - 6)
+        cv2.putText(frame, in_label,  in_side,  font, 0.45, (0, 220, 0), 1)
+        cv2.putText(frame, out_label, out_side, font, 0.45, (100, 100, 255), 1)
 
     def _emit_event(self, direction: str, occupancy: int) -> None:
         from datetime import datetime, timezone

@@ -241,14 +241,16 @@ async def test_get_events_populated_list_schema(api_client):
 
 
 @pytest.mark.asyncio
-async def test_start_session_conflict_returns_409(api_client):
-    """Starting a second active session for the same profile returns 409."""
+async def test_start_session_conflict_reuses_existing(api_client):
+    """Starting a session when one is already active returns the existing session (200)."""
     profile_id = f"conflict-profile-start-{uuid.uuid4().hex[:8]}"
     resp1 = await api_client.post("/api/sessions/start", json={"profile_id": profile_id})
     assert resp1.status_code == 201
+    sid1 = resp1.json()["session_id"]
 
     resp2 = await api_client.post("/api/sessions/start", json={"profile_id": profile_id})
-    assert resp2.status_code == 409
+    assert resp2.status_code == 200
+    assert resp2.json()["session_id"] == sid1, "Must return the same existing session ID"
 
 
 @pytest.mark.asyncio
