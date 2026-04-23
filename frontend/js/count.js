@@ -9,6 +9,8 @@ let sessionId = null;
 let inCount = 0, outCount = 0;
 let paused = false;
 let grayscaleOn = false;
+let sessionStart = null;
+let timerInterval = null;
 let ws = null;
 let wsRetries = 0;
 const MAX_WS_RETRIES = 5;
@@ -16,6 +18,16 @@ const MAX_WS_RETRIES = 5;
 let autoRetries = 0;
 const MAX_AUTO_RETRIES = 3;
 const pageLoadTime = Date.now();
+
+function formatTimer(ms) {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${String(h).padStart(2,"0")}:${mm}:${ss}` : `${mm}:${ss}`;
+}
 
 const streamImg      = document.getElementById("stream");
 const streamError    = document.getElementById("stream-error");
@@ -49,6 +61,14 @@ async function init() {
   const session = await startSession(profileId).catch(e => { alert(e.message); return null; });
   if (!session) return;
   sessionId = session.session_id;  // works for both new (201) and reused (200) sessions
+
+  sessionStart = new Date(session.started_at);
+  const timerEl = document.getElementById("session-timer");
+  if (timerEl) {
+    timerInterval = setInterval(() => {
+      timerEl.textContent = formatTimer(Date.now() - sessionStart);
+    }, 1000);
+  }
 
   startStream();
   connectWs();
@@ -145,6 +165,7 @@ btnStopCancel.addEventListener("click", () => {
 });
 
 btnStopConfirm.addEventListener("click", async () => {
+  if (timerInterval) clearInterval(timerInterval);
   stopBackdrop.classList.add("hidden");
   stopModal.classList.add("hidden");
   if (sessionId) await endSession(sessionId).catch(console.error);
