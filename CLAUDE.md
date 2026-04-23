@@ -5,14 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at:
-specs/002-fix-detection-visibility/plan.md
+specs/003-redesign-bugfix/plan.md
 
 Also read:
-- specs/002-fix-detection-visibility/spec.md (feature specification)
-- specs/002-fix-detection-visibility/research.md (technical decisions)
-- specs/002-fix-detection-visibility/data-model.md (entity schemas)
-- specs/002-fix-detection-visibility/contracts/api.md (API contract delta)
-- specs/002-fix-detection-visibility/quickstart.md (setup guide)
+- specs/003-redesign-bugfix/spec.md (feature specification)
+- specs/003-redesign-bugfix/research.md (technical decisions)
+- specs/003-redesign-bugfix/data-model.md (entity schemas)
+- specs/003-redesign-bugfix/contracts/api.md (API contract delta)
+- specs/003-redesign-bugfix/quickstart.md (setup guide)
 - specs/001-doorway-people-counter/contracts/api.md (full base API contract)
 - .specify/memory/constitution.md (project principles — binding)
 <!-- SPECKIT END -->
@@ -68,7 +68,7 @@ The app serves at **http://localhost:8000** after startup. YOLOv8n weights (~6MB
 
 **Storage**: Door profiles as JSON in `backend/profiles/{uuid}.json`. Counting events in SQLite at `data/counts.db`. Both directories are gitignored and created at startup.
 
-**Frontend** (`frontend/`): Plain HTML + vanilla JS. `index.html` = profile list, `calibrate.html` = 9-step wizard, `count.html` = live view. Served as static files by FastAPI. No build step.
+**Frontend** (`frontend/`): Plain HTML + vanilla JS. `index.html` = profile list, `calibrate.html` = 8-step photo-only wizard, `count.html` = live view. Served as static files by FastAPI. No build step.
 
 **Live stream**: MJPEG over HTTP (`GET /stream?profile_id=...`). Rendered server-side with OpenCV overlays (ROI polygon, counting line, bounding boxes). Consumed by `<img src="...">` — no JS needed.
 

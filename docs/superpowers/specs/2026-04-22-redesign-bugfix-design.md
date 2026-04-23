@@ -1,7 +1,7 @@
 # Design: UI Redesign + Bug Fixes + Video Removal
 
 **Date**: 2026-04-22  
-**Spec**: `specs/003-redesign-bugfix/spec.md` (to be created via speckit)  
+**Spec**: `specs/003-redesign-bugfix/spec.md`  
 **Approach**: Single integrated spec — bug fixes, video removal, and full UI redesign in one pass
 
 ---

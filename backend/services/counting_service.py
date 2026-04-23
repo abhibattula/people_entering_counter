@@ -296,8 +296,11 @@ class CountingService:
 
         # Virtual counting line (yellow, 3px)
         cv2.line(frame, (line["x1"], line["y1"]), (line["x2"], line["y2"]), yellow, 3)
-
         mx = (line["x1"] + line["x2"]) // 2
+        cv2.putText(frame, "COUNT LINE", (mx - 50, line["y1"] - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+
+        # Direction arrow
         my = line["y1"]
 
         # "VIRTUAL LINE" label centred above the line
