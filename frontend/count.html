@@ -9,13 +9,19 @@
 <body>
 <div class="container" style="max-width:1100px">
 
-  <!-- Header bar -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-    <div style="display:flex;align-items:center;gap:.75rem">
+  <!-- Header card -->
+  <div class="count-header">
+    <div class="header-left">
       <div class="live-dot" id="live-dot"></div>
-      <h1 id="profile-name" style="font-size:1.2rem">Loading…</h1>
+      <div>
+        <div class="profile-title" id="profile-name">Loading…</div>
+        <div class="session-meta">
+          <span id="session-timer">00:00</span>
+          <span class="fps-badge" id="fps-badge">● LIVE</span>
+        </div>
+      </div>
     </div>
-    <div style="display:flex;gap:.75rem">
+    <div class="header-right">
       <button class="btn btn-ghost" id="btn-flip">↔ Flip Direction</button>
       <button class="btn btn-ghost" id="btn-pause">⏸ Pause</button>
       <button class="btn btn-danger" id="btn-stop">■ Stop</button>
@@ -23,14 +29,36 @@
   </div>
 
   <!-- Door opens banner -->
-  <div id="door-banner" class="banner banner-warning hidden" style="margin-bottom:1rem">
+  <div id="door-banner" class="banner banner-warning hidden" style="margin-bottom:.75rem">
     ⚠️ This door opens randomly — accuracy may be reduced for up to 60 s after a door state change.
   </div>
 
+  <!-- Count bar -->
+  <div class="count-bar">
+    <div class="count-cell in">
+      <span class="count-label">↑ In</span>
+      <span class="count-value" id="count-in">0</span>
+      <span class="count-sub">people entered</span>
+    </div>
+    <div class="count-cell out">
+      <span class="count-label">↓ Out</span>
+      <span class="count-value" id="count-out">0</span>
+      <span class="count-sub">people exited</span>
+    </div>
+    <div class="count-cell occ">
+      <span class="count-label">= Occupancy</span>
+      <span class="count-value" id="count-occ">0</span>
+      <span class="count-sub">currently inside</span>
+    </div>
+  </div>
+
   <!-- Stream + overlay -->
-  <div class="video-wrapper" style="margin-bottom:1rem">
+  <div class="video-wrapper" style="margin-bottom:.75rem;border-radius:var(--radius-lg)">
     <img id="stream" alt="Live stream" style="background:#000">
-    <div id="stream-error" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7)">
+    <div class="stream-badges">
+      <span class="stream-badge">● LIVE</span>
+    </div>
+    <div id="stream-error" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);border-radius:var(--radius-lg)">
       <div style="text-align:center">
         <p style="color:var(--clr-error);margin-bottom:.75rem">Stream interrupted</p>
         <button class="btn btn-ghost" id="btn-reload-stream">Retry</button>
@@ -38,38 +66,23 @@
     </div>
   </div>
 
-  <!-- Count bar -->
-  <div class="count-bar" style="margin-bottom:1rem">
-    <div class="count-cell in">
-      <span class="count-label">↑ IN</span>
-      <span class="count-value" id="count-in">0</span>
-    </div>
-    <div class="count-cell out">
-      <span class="count-label">↓ OUT</span>
-      <span class="count-value" id="count-out">0</span>
-    </div>
-    <div class="count-cell occ">
-      <span class="count-label">= OCCUPANCY</span>
-      <span class="count-value" id="count-occ">0</span>
-    </div>
-  </div>
-
   <!-- Bottom panel -->
-  <div style="display:grid;grid-template-columns:1fr auto;gap:1rem">
-    <div class="card">
-      <h3 style="font-size:.9rem;color:var(--clr-muted);margin-bottom:.75rem">Recent Events</h3>
+  <div style="display:grid;grid-template-columns:1fr auto;gap:.75rem">
+    <div class="card" style="padding:1rem">
+      <h3 style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--clr-muted);margin-bottom:.75rem">Recent Events</h3>
       <div id="events-log" class="events-log"></div>
     </div>
-    <div class="card" style="display:flex;flex-direction:column;gap:.5rem;min-width:160px">
-      <a href="/calibrate.html" class="btn btn-ghost">⚙ Recalibrate</a>
-      <button class="btn btn-ghost" id="btn-export">📋 Export CSV</button>
-      <button class="btn btn-ghost" id="btn-grayscale">🔲 Grayscale</button>
-      <a href="/" class="btn btn-ghost">🚪 Switch Door</a>
+    <div class="card" style="display:flex;flex-direction:column;gap:.45rem;min-width:155px;padding:1rem">
+      <h3 style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--clr-muted);margin-bottom:.3rem">Actions</h3>
+      <a href="/calibrate.html" class="btn btn-ghost" style="justify-content:center;font-size:.82rem">⚙ Recalibrate</a>
+      <button class="btn btn-ghost" id="btn-export" style="justify-content:center;font-size:.82rem">📋 Export CSV</button>
+      <button class="btn btn-ghost" id="btn-grayscale" style="justify-content:center;font-size:.82rem">🔲 Grayscale</button>
+      <a href="/" class="btn btn-ghost" style="justify-content:center;font-size:.82rem">🚪 Switch Door</a>
     </div>
   </div>
 
   <!-- Reconnecting banner -->
-  <div id="reconnect-banner" class="banner banner-info hidden" style="margin-top:1rem">
+  <div id="reconnect-banner" class="banner banner-info hidden" style="margin-top:.75rem">
     WebSocket disconnected — reconnecting…
   </div>
 </div>
