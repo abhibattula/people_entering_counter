@@ -360,6 +360,8 @@ document.getElementById("btn-save").addEventListener("click", async () => {
     const { id } = await createProfile(body);
     // Release browser camera before Python/OpenCV takes over (constitution Principle IV)
     if (stream) stream.getTracks().forEach(t => t.stop());
+    // Wait 1 s for the OS to fully release the camera handle (Windows timing)
+    await new Promise(r => setTimeout(r, 1000));
     location.href = `/count.html?profile_id=${id}`;
   } catch (e) {
     const err = document.getElementById("save-error");

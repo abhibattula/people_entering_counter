@@ -13,6 +13,10 @@ let ws = null;
 let wsRetries = 0;
 const MAX_WS_RETRIES = 5;
 
+let autoRetries = 0;
+const MAX_AUTO_RETRIES = 3;
+const pageLoadTime = Date.now();
+
 const streamImg      = document.getElementById("stream");
 const streamError    = document.getElementById("stream-error");
 const countIn        = document.getElementById("count-in");
@@ -60,7 +64,13 @@ function startStream() {
 }
 
 function onStreamError() {
-  streamError.classList.remove("hidden");
+  const elapsed = Date.now() - pageLoadTime;
+  if (autoRetries < MAX_AUTO_RETRIES && elapsed < 15000) {
+    autoRetries++;
+    setTimeout(startStream, 2000);   // silent retry — camera may still be releasing
+  } else {
+    streamError.classList.remove("hidden");
+  }
 }
 
 btnReloadStream.addEventListener("click", () => {
