@@ -83,15 +83,46 @@ def _save_profile(data: dict) -> None:
 
 @router.get("/profiles")
 def list_profiles():
+    from backend.db.database import get_connection
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     profiles = []
     for f in PROFILES_DIR.glob("*.json"):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
-            profiles.append({"id": data["id"], "name": data["name"], "created_at": data["created_at"]})
+            profiles.append({
+                "id":         data["id"],
+                "name":       data["name"],
+                "created_at": data["created_at"],
+            })
         except Exception:
             pass  # skip corrupted files
     profiles.sort(key=lambda p: p["created_at"], reverse=True)
+
+    if not profiles:
+        return profiles
+
+    # Enrich with lifetime event counts and session count (one DB query for all profiles)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT s.profile_id, "
+            "  COUNT(DISTINCT s.id)                         AS session_count, "
+            "  COUNT(CASE WHEN e.direction='in'  THEN 1 END) AS total_in, "
+            "  COUNT(CASE WHEN e.direction='out' THEN 1 END) AS total_out "
+            "FROM sessions s "
+            "LEFT JOIN events e ON e.session_id = s.id "
+            "GROUP BY s.profile_id"
+        ).fetchall()
+        stats = {r["profile_id"]: dict(r) for r in rows}
+    finally:
+        conn.close()
+
+    for p in profiles:
+        s = stats.get(p["id"], {"session_count": 0, "total_in": 0, "total_out": 0})
+        p["session_count"] = s["session_count"]
+        p["total_in"]      = s["total_in"]
+        p["total_out"]     = s["total_out"]
+
     return profiles
 
 
