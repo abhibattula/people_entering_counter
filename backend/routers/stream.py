@@ -35,26 +35,8 @@ async def _mjpeg_generator(profile_id: str, grayscale: bool = False):
 
 @router.get("/stream")
 async def mjpeg_stream(profile_id: str, grayscale: bool = False):
-    profile = _load_profile(profile_id)
-    camera_index = profile.get("camera_index", CAMERA_INDEX)
-
-    # Check camera availability before starting the stream
     svc = get_or_create_service(profile_id)
-    if not svc.is_running():
-        cap = cv2.VideoCapture(camera_index)
-        camera_ok = cap.isOpened()
-        cap.release()
-        if not camera_ok:
-            return JSONResponse(
-                {
-                    "error": "camera_unavailable",
-                    "message": "Camera could not be opened. Close other apps using the camera and retry.",
-                },
-                status_code=503,
-            )
-
     svc.set_grayscale(grayscale)
-
     return StreamingResponse(
         _mjpeg_generator(profile_id, grayscale=grayscale),
         media_type="multipart/x-mixed-replace; boundary=frame",
