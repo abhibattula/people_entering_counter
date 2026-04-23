@@ -4,9 +4,8 @@ import { drawPolygon, drawLine, drawArrow, renderQualityBadges, blobToJpeg } fro
 // ── State ─────────────────────────────────────────────────────────────────
 let stream = null;
 let currentStep = 1;
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
-let captureMode = "photo"; // "photo" | "video"
 let capturedFrames = [];    // Blob[]
 const PHOTO_INSTRUCTIONS = [
   "Centre view — fill the doorway",
@@ -40,10 +39,26 @@ function showStep(n) {
   renderDots();
 }
 
+const STEP_NAMES = ["Camera", "Preview", "Capture", "Quality", "Boundary", "Draw", "Door", "Save"];
+
 function renderDots() {
-  dots.innerHTML = Array.from({ length: TOTAL_STEPS }, (_, i) => {
-    const cls = i + 1 < currentStep ? "done" : i + 1 === currentStep ? "current" : "";
-    return `<div class="step-dot ${cls}"></div>`;
+  dots.innerHTML = STEP_NAMES.map((name, i) => {
+    const n = i + 1;
+    const cls = n < currentStep ? "done" : n === currentStep ? "current" : "";
+    const inner = n < currentStep
+      ? `<span style="font-size:.55rem;color:#fff">✓</span>`
+      : n === currentStep
+        ? `<span class="prog-inner-dot"></span>`
+        : "";
+    const connector = i < TOTAL_STEPS - 1
+      ? `<div class="prog-connector${n < currentStep ? " done" : ""}"></div>`
+      : "";
+    return `
+      <div class="prog-step-wrap">
+        <div class="prog-dot ${cls}">${inner}</div>
+        <div class="prog-label ${cls}">${name}</div>
+      </div>
+      ${connector}`;
   }).join("");
 }
 
@@ -72,20 +87,13 @@ document.getElementById("btn-allow-camera").addEventListener("click", async () =
 
 // ── Step 2: Preview ───────────────────────────────────────────────────────
 
-document.getElementById("btn-to-mode").addEventListener("click", () => showStep(3));
-
-// ── Step 3: Mode selection ────────────────────────────────────────────────
-
-document.getElementById("btn-photo-mode").addEventListener("click", () => {
-  captureMode = "photo"; photoIndex = 0;
-  startPhotoCapture(); showStep(4);
-});
-document.getElementById("btn-video-mode").addEventListener("click", () => {
-  captureMode = "video";
-  startVideoCapture(); showStep(4);
+document.getElementById("btn-to-mode").addEventListener("click", () => {
+  photoIndex = 0;
+  startPhotoCapture();
+  showStep(3);
 });
 
-// ── Step 4: Capture ───────────────────────────────────────────────────────
+// ── Step 3: Capture ───────────────────────────────────────────────────────
 
 function startPhotoCapture() {
   capturedFrames = [];
@@ -123,55 +131,10 @@ document.getElementById("btn-capture").addEventListener("click", async () => {
   }
 });
 
-async function startVideoCapture() {
-  document.getElementById("capture-heading").textContent = "5-Second Video Clip";
-  document.getElementById("capture-instruction").textContent = "Keep the camera steady — recording automatically";
-  document.getElementById("btn-capture").classList.add("hidden");
-  capturedFrames = [];
-
-  const countdown = document.getElementById("countdown-overlay");
-  countdown.classList.remove("hidden");
-  for (const n of [3, 2, 1]) {
-    countdown.textContent = n;
-    await sleep(1000);
-  }
-  countdown.textContent = "●";
-
-  const chunks = [];
-  const recorder = new MediaRecorder(stream);
-  recorder.ondataavailable = e => chunks.push(e.data);
-  recorder.start();
-  await sleep(5000);
-  recorder.stop();
-  await new Promise(r => recorder.onstop = r);
-  countdown.classList.add("hidden");
-
-  // Extract 15 evenly-spaced frames from the clip
-  const blob = new Blob(chunks, { type: recorder.mimeType });
-  const url = URL.createObjectURL(blob);
-  const video = document.createElement("video");
-  video.src = url;
-  await new Promise(r => video.onloadedmetadata = r);
-  const duration = video.duration;
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  const ctx = canvas.getContext("2d");
-  for (let i = 0; i < 15; i++) {
-    video.currentTime = (i / 14) * duration;
-    await new Promise(r => video.onseeked = r);
-    ctx.drawImage(video, 0, 0);
-    const frameBlob = await blobToJpeg(canvas);
-    capturedFrames.push(frameBlob);
-  }
-  URL.revokeObjectURL(url);
-  await submitFrames();
-}
-
 async function submitFrames() {
   document.getElementById("capture-instruction").textContent = "Analysing frames…";
   try {
-    const resp = await startCalibration(capturedFrames, captureMode);
+    const resp = await startCalibration(capturedFrames, "photo");
     qualityResult = resp.quality_check;
     proposalResult = resp.proposal;
     showQualityStep();
@@ -182,24 +145,23 @@ async function submitFrames() {
   }
 }
 
-// ── Step 5: Quality check ─────────────────────────────────────────────────
+// ── Step 4: Quality check ─────────────────────────────────────────────────
 
 function showQualityStep() {
   renderQualityBadges(document.getElementById("quality-badges"), qualityResult);
   const critical = !qualityResult.door_fully_visible || !qualityResult.lighting_acceptable;
   document.getElementById("btn-recapture").style.display = critical ? "" : "none";
-  showStep(5);
+  showStep(4);
 }
 
 document.getElementById("btn-recapture").addEventListener("click", () => {
   photoIndex = 0; capturedFrames = [];
-  if (captureMode === "photo") { startPhotoCapture(); showStep(4); }
-  else { startVideoCapture(); showStep(4); }
+  startPhotoCapture(); showStep(3);
 });
 
 document.getElementById("btn-continue-anyway").addEventListener("click", () => showProposalStep());
 
-// ── Step 6: Proposal ──────────────────────────────────────────────────────
+// ── Step 5: Proposal ──────────────────────────────────────────────────────
 
 function showProposalStep() {
   flippedDirection = null;
@@ -221,7 +183,7 @@ function showProposalStep() {
   document.getElementById("btn-draw-manual").classList.toggle(
     "hidden", !proposalResult.manual_fallback_available
   );
-  showStep(6);
+  showStep(5);
 }
 
 document.getElementById("btn-flip-direction").addEventListener("click", () => {
@@ -231,11 +193,11 @@ document.getElementById("btn-flip-direction").addEventListener("click", () => {
   showProposalStep();
 });
 
-document.getElementById("btn-accept-proposal").addEventListener("click", () => showStep(8));
+document.getElementById("btn-accept-proposal").addEventListener("click", () => showStep(7));
 
 document.getElementById("btn-reject-proposal").addEventListener("click", async () => {
   try {
-    const resp = await retryCalibration(capturedFrames, captureMode);
+    const resp = await retryCalibration(capturedFrames, "photo");
     qualityResult = resp.quality_check;
     proposalResult = resp.proposal;
     showProposalStep();
@@ -249,7 +211,7 @@ document.getElementById("btn-reject-proposal").addEventListener("click", async (
 
 document.getElementById("btn-draw-manual").addEventListener("click", () => startManualDraw());
 
-// ── Step 7: Manual draw ───────────────────────────────────────────────────
+// ── Step 6: Manual draw ───────────────────────────────────────────────────
 
 function startManualDraw() {
   drawPoints = []; lineY = null; drawBgImage = null;
@@ -264,7 +226,7 @@ function startManualDraw() {
     redrawManual(canvas);
   };
   img.src = "data:image/jpeg;base64," + proposalResult.best_frame_b64;
-  showStep(7);
+  showStep(6);
 }
 
 document.getElementById("draw-canvas").addEventListener("click", (e) => {
@@ -328,15 +290,15 @@ document.getElementById("btn-save-draw").addEventListener("click", () => {
     roi_polygon: drawPoints,
     counting_line: { x1: Math.min(...xs), y1: mid_y, x2: Math.max(...xs), y2: mid_y },
   };
-  showStep(8);
+  showStep(7);
 });
 
-// ── Step 8: Door behaviour ────────────────────────────────────────────────
+// ── Step 7: Door behaviour ────────────────────────────────────────────────
 
-document.getElementById("btn-door-no").addEventListener("click", () => { doorRandomlyOpens = false; showStep(9); });
-document.getElementById("btn-door-yes").addEventListener("click", () => { doorRandomlyOpens = true; showStep(9); });
+document.getElementById("btn-door-no").addEventListener("click", () => { doorRandomlyOpens = false; showStep(8); });
+document.getElementById("btn-door-yes").addEventListener("click", () => { doorRandomlyOpens = true; showStep(8); });
 
-// ── Step 9: Save ──────────────────────────────────────────────────────────
+// ── Step 8: Save ──────────────────────────────────────────────────────────
 
 document.getElementById("btn-save").addEventListener("click", async () => {
   const name = document.getElementById("profile-name").value.trim();
@@ -346,7 +308,7 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   const body = {
     name,
     camera_index: 0,
-    capture_mode: captureMode,
+    capture_mode: "photo",
     frame_width: video.videoWidth || 1280,
     frame_height: video.videoHeight || 720,
     roi_polygon: proposalResult.roi_polygon,
@@ -369,10 +331,6 @@ document.getElementById("btn-save").addEventListener("click", async () => {
     err.classList.remove("hidden");
   }
 });
-
-// ── Utilities ─────────────────────────────────────────────────────────────
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // Boot
 showStep(1);
