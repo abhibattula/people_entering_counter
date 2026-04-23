@@ -8,28 +8,35 @@
 </head>
 <body>
 <div class="container">
-  <header style="margin-bottom:2rem">
-    <h1 style="font-size:1.6rem">Doorway People Counter</h1>
-    <p style="color:var(--clr-muted);margin-top:.25rem">Track who enters and exits your space</p>
-  </header>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
-    <h2 style="font-size:1.1rem">Saved Profiles</h2>
-    <div style="display:flex;gap:.75rem">
+  <header class="app-header">
+    <div class="app-brand">
+      <div class="app-icon">🚪</div>
+      <div>
+        <div class="app-title">Doorway Counter</div>
+        <div class="app-sub">Track who enters and exits your space</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:.6rem;align-items:center">
       <label class="btn btn-ghost" style="cursor:pointer">
-        Import Profile
+        ⬆ Import
         <input type="file" id="import-input" accept=".json" style="display:none">
       </label>
       <a href="/calibrate.html" class="btn btn-primary">+ New Profile</a>
     </div>
-  </div>
+  </header>
 
   <div id="import-banner" class="banner banner-info hidden" style="margin-bottom:1rem"></div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <h2 style="font-size:.9rem;font-weight:600;color:var(--clr-muted);text-transform:uppercase;letter-spacing:.06em">Saved Profiles</h2>
+    <span id="profile-count" style="font-size:.8rem;color:var(--clr-muted)"></span>
+  </div>
 
   <div id="profiles-list">
     <div class="card" style="text-align:center;padding:3rem">
       <p style="color:var(--clr-muted);margin-bottom:1rem">No door profiles yet</p>
-      <a href="/calibrate.html" class="btn btn-primary">Create New Door/Entryway Profile</a>
+      <a href="/calibrate.html" class="btn btn-primary">Create Your First Profile</a>
     </div>
   </div>
 
@@ -48,16 +55,25 @@
 <script type="module">
 import { getProfiles, deleteProfile, importProfile, getSessions, exportSession } from "/js/api.js";
 
-const list = document.getElementById("profiles-list");
-const historyModal = document.getElementById("history-modal");
-const historyTitle = document.getElementById("history-title");
-const historyList = document.getElementById("history-list");
-const importInput = document.getElementById("import-input");
-const importBanner = document.getElementById("import-banner");
+const list          = document.getElementById("profiles-list");
+const profileCount  = document.getElementById("profile-count");
+const historyModal  = document.getElementById("history-modal");
+const historyTitle  = document.getElementById("history-title");
+const historyList   = document.getElementById("history-list");
+const importInput   = document.getElementById("import-input");
+const importBanner  = document.getElementById("import-banner");
 
 async function loadProfiles() {
   const profiles = await getProfiles().catch(() => []);
-  if (profiles.length === 0) return; // keep empty state
+  if (profiles.length === 0) {
+    profileCount.textContent = "";
+    list.innerHTML = `<div class="card" style="text-align:center;padding:3rem">
+      <p style="color:var(--clr-muted);margin-bottom:1rem">No door profiles yet</p>
+      <a href="/calibrate.html" class="btn btn-primary">Create Your First Profile</a>
+    </div>`;
+    return;
+  }
+  profileCount.textContent = `${profiles.length} profile${profiles.length !== 1 ? "s" : ""}`;
   list.innerHTML = `<div class="profile-grid">${profiles.map(renderCard).join("")}</div>`;
   list.querySelectorAll("[data-start]").forEach(btn =>
     btn.addEventListener("click", () => location.href = `/count.html?profile_id=${btn.dataset.start}`)
@@ -71,14 +87,31 @@ async function loadProfiles() {
 }
 
 function renderCard(p) {
+  const created = new Date(p.created_at).toLocaleDateString();
+  const sessions = p.session_count || 0;
+  const meta = `Created ${created} · ${sessions} session${sessions !== 1 ? "s" : ""}`;
   return `
     <div class="profile-card">
-      <h3>${escHtml(p.name)}</h3>
-      <p class="meta">Created ${new Date(p.created_at).toLocaleDateString()}</p>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <h3>${escHtml(p.name)}</h3>
+          <p class="meta" style="margin-top:.2rem">${meta}</p>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-cell in-cell">
+          <span class="stat-label">↑ Total In</span>
+          <span class="stat-value">${p.total_in ?? 0}</span>
+        </div>
+        <div class="stat-cell out-cell">
+          <span class="stat-label">↓ Total Out</span>
+          <span class="stat-value">${p.total_out ?? 0}</span>
+        </div>
+      </div>
       <div class="actions">
-        <button class="btn btn-primary" style="flex:1" data-start="${p.id}">Start Counting</button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" data-start="${p.id}">▶ Start Counting</button>
         <button class="btn btn-ghost" data-history="${p.id}" data-name="${escHtml(p.name)}">History</button>
-        <button class="btn btn-danger" data-delete="${p.id}">✕</button>
+        <button class="btn btn-danger" data-delete="${p.id}" title="Delete profile">✕</button>
       </div>
     </div>`;
 }
@@ -105,7 +138,7 @@ async function showHistory(profileId, name) {
           <p style="font-weight:600">${new Date(s.started_at).toLocaleString()}</p>
           <p style="font-size:.85rem;color:var(--clr-muted)">
             ${s.ended_at ? "Ended " + new Date(s.ended_at).toLocaleTimeString() : "Active"}
-            &nbsp;·&nbsp; ↑ IN: ${s.total_in}  ↓ OUT: ${s.total_out}
+            &nbsp;·&nbsp; ↑ IN: ${s.total_in ?? 0}  ↓ OUT: ${s.total_out ?? 0}
           </p>
         </div>
         <button class="btn btn-ghost" onclick="downloadCsv('${s.id}')">Export CSV</button>
