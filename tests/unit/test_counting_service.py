@@ -245,3 +245,33 @@ def test_centroid_outside_roi_is_not_tracked():
     from backend.services.counting_service import is_inside_roi
     polygon = [[100, 100], [500, 100], [500, 400], [100, 400]]
     assert is_inside_roi((50, 50), polygon) is False
+
+
+# ── Stop order (Task 1 fix) ───────────────────────────────────────────────
+
+def test_stop_releases_camera_before_joining_thread():
+    """Camera must be released BEFORE the thread is joined so the thread can detect
+    the release via cap.read() → ret=False and exit without waiting for YOLO."""
+    import threading
+    from backend.services.counting_service import CountingService
+
+    svc = CountingService()
+    mock_cap = MagicMock()
+    mock_thread = MagicMock(spec=threading.Thread)
+
+    svc._cap = mock_cap
+    svc._thread = mock_thread
+    svc._running = True
+
+    call_order = []
+    mock_cap.release.side_effect = lambda: call_order.append("cap_release")
+    mock_thread.join.side_effect = lambda timeout=None: call_order.append("thread_join")
+
+    svc.stop()
+
+    assert call_order == ["cap_release", "thread_join"], (
+        f"Expected camera release BEFORE thread join, got: {call_order}"
+    )
+    assert svc._cap is None
+    assert not svc._running
+    assert svc._latest_frame is None

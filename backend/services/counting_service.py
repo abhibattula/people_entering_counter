@@ -129,11 +129,11 @@ class CountingService:
 
     def stop(self) -> None:
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=3)
-        if self._cap:
+        if self._cap:           # release FIRST — unblocks the loop via ret=False
             self._cap.release()
             self._cap = None
+        if self._thread:        # join AFTER — thread exits quickly once cap is gone
+            self._thread.join(timeout=5)
         self._latest_frame = None
 
     def pause(self) -> None:
